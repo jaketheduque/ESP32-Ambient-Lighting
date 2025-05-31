@@ -1,0 +1,97 @@
+menu "ESP WiFi Configuration"
+    config ESP_WIFI_SSID
+        string "WiFi SSID"
+        default "myssid"
+        help
+            SSID (network name) for the example to connect to.
+    config ESP_WIFI_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        help
+            WiFi password (WPA or WPA2) for the example to use.
+    config ESP_WIFI_CHANNEL
+        int "WiFi Channel"
+        range 1 13
+        default 1
+        help
+            WiFi channel (network channel) for the example to use.
+    config ESP_MAX_STA_CONN
+        int "Maximal STA connections"
+        default 4
+        help
+            Max number of the STA connects to AP.
+endmenu
+
+menu "Ambient Lighting GPIO Configuration"
+  config DRIVER_DASHBOARD_GPIO
+    int "Driver Dashboard GPIO"
+    default 21
+    help
+      GPIO pin number for the driver dashboard ambient light.
+
+  config DRIVER_DASHBOARD_MAX_LEDS
+    int "Driver Dashboard Max LEDs"
+    default 110
+    help
+      Maximum number of LEDs for the driver dashboard ambient light.
+
+  config PASSENGER_DASHBOARD_GPIO
+    int "Passenger Dashboard GPIO"
+    default 22
+    help
+      GPIO pin number for the passenger dashboard ambient light.
+
+  config PASSENGER_DASHBOARD_MAX_LEDS
+    int "Passenger Dashboard Max LEDs"
+    default 110
+    help
+      Maximum number of LEDs for the passenger dashboard ambient light.
+
+  config DRIVER_CENTER_GPIO
+    int "Driver Center GPIO"
+    default 23
+    help
+      GPIO pin number for the driver center ambient light.
+
+  config DRIVER_CENTER_MAX_LEDS
+    int "Driver Center Max LEDs"
+    default 110
+    help
+      Maximum number of LEDs for the driver center ambient light.
+
+  config PASSENGER_CENTER_GPIO
+    int "Passenger Center GPIO"
+    default 24
+    help
+      GPIO pin number for the passenger center ambient light.
+
+  config PASSENGER_CENTER_MAX_LEDS
+    int "Passenger Center Max LEDs"
+    default 110
+    help
+      Maximum number of LEDs for the passenger center ambient light.
+
+  config DRIVER_DOOR_GPIO
+    int "Driver Door GPIO"
+    default 25
+    help
+      GPIO pin number for the driver door ambient light.
+
+  config DRIVER_DOOR_MAX_LEDS
+    int "Driver Door Max LEDs"
+    default 110
+    help
+      Maximum number of LEDs for the driver door ambient light.
+
+  config PASSENGER_DOOR_GPIO
+    int "Passenger Door GPIO"
+    default 26
+    help
+      GPIO pin number for the passenger door ambient light.
+
+  config PASSENGER_DOOR_MAX_LEDS
+    int "Passenger Door Max LEDs"
+    default 110
+    help
+      Maximum number of LEDs for the passenger door ambient light.
+endmenu

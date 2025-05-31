@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tesla Ambient Lighting</title>
+</head>
+
+<body>
+  <label for="red">Red:</label>
+  <input type="number" id="red" name="red" min="0" max="255" value="0">
+  <br>
+  <label for="green">Green:</label>
+  <input type="number" id="green" name="green" min="0" max="255" value="0">
+  <br>
+  <label for="blue">Blue:</label>
+  <input type="number" id="blue" name="blue" min="0" max="255" value="0">
+  <br>
+  <button id="submitBtn">Submit</button>
+  <script>
+    document.getElementById('submitBtn').addEventListener('click', function() {
+      const red = document.getElementById('red').value;
+      const green = document.getElementById('green').value;
+      const blue = document.getElementById('blue').value;
+      fetch('/api', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ red: Number(red), green: Number(green), blue: Number(blue) })
+      });
+    });
+  </script>
+</body>
+</html>
