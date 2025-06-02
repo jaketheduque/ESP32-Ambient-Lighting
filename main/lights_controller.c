@@ -32,12 +32,31 @@ void lights_task(void *arg) {
           }
           led_strip_refresh(led_strip);
           break;
+        case COMMAND_SEQUENTIAL:
+          /* Reset LED strip before sequential animation */
+          led_strip_clear(led_strip);
+          led_strip_refresh(led_strip);
+
+          uint8_t led_index = 0;
+          RGB temp_color = {0, 0, 0};
+
+          /* Increment each LED brightness by number_steps until reaching current_color, then move to next LED */
+          while (led_index < strip_config.max_leds) {
+            for (int step = 0; step < command.data.step.num_steps; step++) {
+              temp_color.red = (light->current_color.red * (step + 1)) / command.data.step.num_steps;
+              temp_color.green = (light->current_color.green * (step + 1)) / command.data.step.num_steps;
+              temp_color.blue = (light->current_color.blue * (step + 1)) / command.data.step.num_steps;
+
+              led_strip_set_pixel(led_strip, led_index, temp_color.red, temp_color.green, temp_color.blue);
+              led_strip_refresh(led_strip);
+              vTaskDelay(pdMS_TO_TICKS(command.data.step.delay_ms));
+            }
+            led_index++;
+          }
+
+          break;
         case COMMAND_SET_COLOR:
           light->current_color = command.data.color;
-          for (int i = 0 ; i < strip_config.max_leds ; i++) {
-              led_strip_set_pixel(led_strip, i, light->current_color.red, light->current_color.green, light->current_color.blue);
-          }
-          led_strip_refresh(led_strip);
           break;
       }
     }
@@ -68,7 +87,7 @@ esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const i
   // Initialize the RMT configuration
   light->rmt_config.clk_src = RMT_CLK_SRC_DEFAULT; // Default clock source
   light->rmt_config.resolution_hz = 10 * 1000 * 1000; // RMT counter clock frequency: 10MHz
-  light->rmt_config.mem_block_symbols = 64; // Memory size of each RMT channel, in words (4 bytes)
+  light->rmt_config.mem_block_symbols = 64; // Memory size of each RMT channel
   light->rmt_config.flags.with_dma = false; // Disable DMA feature
 
   // Create a command queue for handling commands

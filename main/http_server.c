@@ -111,9 +111,21 @@ esp_err_t post_handler(httpd_req_t *req)
     } else {
       command.type = COMMAND_SET_COLOR;
       command.data.color = color;
+
+      /* If the color is not black, set color for lights */
+      for (int i = 0; i < NUM_LIGHTS; i++) {
+        /* Send command to the queue */
+        if (xQueueSend(lights[i].command_queue, &command, portMAX_DELAY) != pdTRUE) {
+            ESP_LOGE(TAG, "Failed to send command to queue");
+            return ESP_FAIL;
+        }
+      }
+
+      /* Separate command to actually turn on lights */
+      command.type = COMMAND_TURN_ON;
     }
 
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < NUM_LIGHTS; i++) {
       /* Send command to the queue */
       if (xQueueSend(lights[i].command_queue, &command, portMAX_DELAY) != pdTRUE) {
           ESP_LOGE(TAG, "Failed to send command to queue");

@@ -8,14 +8,11 @@
 #include <led_strip.h>
 
 /* Macros */
-#define NUM_LIGHTS 6
+#define NUM_LIGHTS 3
 
-#define DRIVER_DASHBOARD_INDEX 0
-#define PASSENGER_DASHBOARD_INDEX 1
-#define DRIVER_CENTER_INDEX 2
-#define PASSENGER_CENTER_INDEX 3
-#define DRIVER_DOOR_INDEX 4
-#define PASSENGER_DOOR_INDEX 5
+#define DASHBOARD_INDEX 0
+#define CENTER_INDEX 1
+#define DOOR_INDEX 2
 
 #define DISPLAY_CAN_ID 0x3B3
 #define LIGHTS_CAN_ID 0x3F5
@@ -29,8 +26,9 @@
 /* Enums */
 typedef enum {
   COMMAND_TURN_OFF,
-  COMMAND_TURN_ON,
-  COMMAND_SET_COLOR
+  COMMAND_TURN_ON, /* Turns on the lights with the current color set in ambient_light_t, can also be used to "refresh" after color change */
+  COMMAND_SET_COLOR, /* Only sets the current color of the ambient_light_t, another command is required to turn on the lights */
+  COMMAND_SEQUENTIAL
 } CommandType;
 
 /* Structs */
@@ -41,9 +39,15 @@ typedef struct {
 } RGB;
 
 typedef struct {
+  uint8_t num_steps;
+  uint32_t delay_ms;
+} SequentialStep;
+
+typedef struct {
   CommandType type;
   union {
     RGB color;
+    SequentialStep step;
   } data;
 } Command;
 
