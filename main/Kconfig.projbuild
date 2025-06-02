@@ -59,3 +59,47 @@ menu "Ambient Lighting GPIO Configuration"
     help
       Maximum number of LEDs for the door ambient light.
 endmenu
+
+menu "Task Configuration"
+  config CAN_SNIFFER_TASK_PRIORITY
+    int "CAN Bus Sniffer Task Priority"
+    range 1 25
+    default 10
+    help
+      Priority level for the CAN bus sniffer task.
+
+  config CAN_SNIFFER_TASK_CORE
+    int "CAN Bus Sniffer Task Core Affinity"
+    range 0 1
+    default 1
+    help
+      Core affinity for the CAN bus sniffer task (0 or 1).
+
+  config HTTP_SERVER_TASK_PRIORITY
+    int "HTTP Server Task Priority"
+    range 1 25
+    default 8
+    help
+      Priority level for the HTTP server task.
+
+  config HTTP_SERVER_TASK_CORE
+    int "HTTP Server Task Core Affinity"
+    range 0 1
+    default 0
+    help
+      Core affinity for the HTTP server task (0 or 1).
+
+  config LIGHT_CONTROLLER_TASK_PRIORITY
+    int "Light Controller Task Priority"
+    range 1 25
+    default 6
+    help
+      Priority level for the light controller task.
+
+  config LIGHT_CONTROLLER_TASK_CORE
+    int "Light Controller Task Core Affinity"
+    range 0 1
+    default 0
+    help
+      Core affinity for the light controller task (0 or 1).
+endmenu

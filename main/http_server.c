@@ -19,8 +19,7 @@
 static const char *TAG = "AP";
 
 /* Our URI handler function to be called during GET /uri request */
-esp_err_t get_handler(httpd_req_t *req)
-{
+esp_err_t get_handler(httpd_req_t *req) {
   /* Send a simple response */
   const char resp[] =
     "<!DOCTYPE html>\n"
@@ -31,6 +30,8 @@ esp_err_t get_handler(httpd_req_t *req)
     "  <title>Tesla Ambient Lighting</title>\n"
     "</head>\n"
     "<body>\n"
+    "  <h1>Tesla Ambient Lighting Control</h1>\n"
+    "  <p><b>Note:</b> Any changes to color made will appear on the next light refresh</p>\n"
     "  <label for=\"red\">Red:</label>\n"
     "  <input type=\"number\" id=\"red\" name=\"red\" min=\"0\" max=\"255\" value=\"0\">\n"
     "  <br>\n"
@@ -62,8 +63,7 @@ esp_err_t get_handler(httpd_req_t *req)
 }
 
 /* Our URI handler function to be called during POST /uri request */
-esp_err_t post_handler(httpd_req_t *req)
-{
+esp_err_t post_handler(httpd_req_t *req) {
     /* Destination buffer for content of HTTP POST request.
      * httpd_req_recv() accepts char* only, but content could
      * as well be any binary data (needs type casting).
@@ -99,39 +99,40 @@ esp_err_t post_handler(httpd_req_t *req)
     uint8_t red = cJSON_GetNumberValue(cJSON_GetObjectItem(json, "red"));
     uint8_t green = cJSON_GetNumberValue(cJSON_GetObjectItem(json, "green"));
     uint8_t blue = cJSON_GetNumberValue(cJSON_GetObjectItem(json, "blue"));
-    RGB color = {red, green, blue};
+    rgb_t color = {red, green, blue};
 
     /* Deallocate JSON data */
     cJSON_Delete(json);
 
     /* Create command and add to queue */
-    Command command;
+    command_t *command = calloc(1, sizeof(command_t));
+    if (!command) {
+      ESP_LOGE(TAG, "Failed to allocate memory for command");
+      return ESP_FAIL;
+    }
+
     if (color.red == 0 && color.green == 0 && color.blue == 0) {
-      command.type = COMMAND_TURN_OFF;
+      command->type = COMMAND_TURN_OFF;
     } else {
-      command.type = COMMAND_SET_COLOR;
-      command.data.color = color;
-
-      /* If the color is not black, set color for lights */
-      for (int i = 0; i < NUM_LIGHTS; i++) {
-        /* Send command to the queue */
-        if (xQueueSend(lights[i].command_queue, &command, portMAX_DELAY) != pdTRUE) {
-            ESP_LOGE(TAG, "Failed to send command to queue");
-            return ESP_FAIL;
-        }
-      }
-
-      /* Separate command to actually turn on lights */
-      command.type = COMMAND_TURN_ON;
+      command->type = COMMAND_SET_COLOR;
+      command->data.color = color;
     }
 
     for (int i = 0; i < NUM_LIGHTS; i++) {
+      command_t* temp_command = calloc(1, sizeof(command_t));
+      *temp_command = *command; // Copy command data
+
       /* Send command to the queue */
-      if (xQueueSend(lights[i].command_queue, &command, portMAX_DELAY) != pdTRUE) {
-          ESP_LOGE(TAG, "Failed to send command to queue");
-          return ESP_FAIL;
+      if (xQueueSend(lights[i].command_queue, &temp_command, portMAX_DELAY) != pdTRUE) {
+        ESP_LOGE(TAG, "Failed to send command to queue");
+        free(temp_command);
+        free(command);
+        return ESP_FAIL;
       }
     }
+
+    free(command);
+    command = NULL;
 
     return ESP_OK;
 }
@@ -153,12 +154,11 @@ httpd_uri_t uri_post = {
 };
 
 /* Function for starting the webserver */
-httpd_handle_t start_webserver(void)
-{
+httpd_handle_t start_webserver(void) {
     /* Generate default configuration */
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.task_priority = WEB_SERVER_TASK_PRIORITY;
-    config.core_id = 0;
+    config.task_priority = CONFIG_HTTP_SERVER_TASK_PRIORITY;
+    config.core_id = CONFIG_HTTP_SERVER_TASK_CORE;
     config.stack_size = 4096;
 
     /* Empty handle to esp_http_server */
@@ -175,8 +175,7 @@ httpd_handle_t start_webserver(void)
 }
 
 /* Function for stopping the webserver */
-void stop_webserver(httpd_handle_t server)
-{
+void stop_webserver(httpd_handle_t server) {
     if (server) {
         /* Stop the httpd server */
         httpd_stop(server);

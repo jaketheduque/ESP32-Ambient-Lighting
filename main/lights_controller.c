@@ -6,7 +6,7 @@
 
 #include "main_common.h"
 
-static const char *TAG = "LightsController";
+static const char *TAG = "light_controller";
 
 void lights_task(void *arg) {
   ambient_light_t *light = (ambient_light_t *) arg;
@@ -18,11 +18,11 @@ void lights_task(void *arg) {
   ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
   led_strip_clear(led_strip);
 
-  Command command;
+  command_t* command;
   while (1) {
     /* Wait for a command from the queue */
     if (xQueueReceive(light->command_queue, &command, portMAX_DELAY)) {
-      switch (command.type) {
+      switch (command->type) {
         case COMMAND_TURN_OFF:
           led_strip_clear(led_strip);
           break;
@@ -37,30 +37,60 @@ void lights_task(void *arg) {
           led_strip_clear(led_strip);
           led_strip_refresh(led_strip);
 
-          uint8_t led_index = 0;
-          RGB temp_color = {0, 0, 0};
+          rgb_t temp_color = {0, 0, 0};
 
           /* Increment each LED brightness by number_steps until reaching current_color, then move to next LED */
-          while (led_index < strip_config.max_leds) {
-            for (int step = 0; step < command.data.step.num_steps; step++) {
-              temp_color.red = (light->current_color.red * (step + 1)) / command.data.step.num_steps;
-              temp_color.green = (light->current_color.green * (step + 1)) / command.data.step.num_steps;
-              temp_color.blue = (light->current_color.blue * (step + 1)) / command.data.step.num_steps;
+          if (command->data.step.reverse) {
+            // Reverse order: start from the last LED and move to the first
+            for (int led_index = strip_config.max_leds - 1; led_index >= 0; led_index--) {
+              for (int step = 0; step < command->data.step.num_steps; step++) {
+                temp_color.red = (light->current_color.red * (step + 1)) / command->data.step.num_steps;
+                temp_color.green = (light->current_color.green * (step + 1)) / command->data.step.num_steps;
+                temp_color.blue = (light->current_color.blue * (step + 1)) / command->data.step.num_steps;
 
-              led_strip_set_pixel(led_strip, led_index, temp_color.red, temp_color.green, temp_color.blue);
-              led_strip_refresh(led_strip);
-              vTaskDelay(pdMS_TO_TICKS(command.data.step.delay_ms));
+                led_strip_set_pixel(led_strip, led_index, temp_color.red, temp_color.green, temp_color.blue);
+                led_strip_refresh(led_strip);
+                vTaskDelay(pdMS_TO_TICKS(command->data.step.delay_ms));
+              }
             }
-            led_index++;
-          }
+          } else {
+            // Normal order: start from the first LED and move to the last
+            for (int led_index = 0; led_index < strip_config.max_leds; led_index++) {
+              for (int step = 0; step < command->data.step.num_steps; step++) {
+                temp_color.red = (light->current_color.red * (step + 1)) / command->data.step.num_steps;
+                temp_color.green = (light->current_color.green * (step + 1)) / command->data.step.num_steps;
+                temp_color.blue = (light->current_color.blue * (step + 1)) / command->data.step.num_steps;
 
+                led_strip_set_pixel(led_strip, led_index, temp_color.red, temp_color.green, temp_color.blue);
+                led_strip_refresh(led_strip);
+                vTaskDelay(pdMS_TO_TICKS(command->data.step.delay_ms));
+              }
+            }
+          }
           break;
         case COMMAND_SET_COLOR:
-          light->current_color = command.data.color;
+          light->current_color = command->data.color;
           break;
       }
+
+      /* Check if there is a valid chained command */
+      if (command->chained_command != NULL) {
+        /* If there is a chained command, send it to the queue */
+        if (xQueueSend(command->chained_command_queue, &command->chained_command, portMAX_DELAY) != pdTRUE) {
+          ESP_LOGE(TAG, "Failed to send chained command to queue");
+        }
+      }
+
+      /* Deallocate command memory */
+      free(command);
+      command = NULL;
     }
   }
+
+  /* Delete the task if it exits the loop */
+  ESP_LOGI(TAG, "Exiting light controller task");
+  vTaskDelete(NULL);
+  return;
 }
 
 /**
@@ -91,7 +121,7 @@ esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const i
   light->rmt_config.flags.with_dma = false; // Disable DMA feature
 
   // Create a command queue for handling commands
-  light->command_queue = xQueueCreate(10, sizeof(Command));
+  light->command_queue = xQueueCreate(10, sizeof(command_t*));
   
   if (light->command_queue == NULL) {
     ESP_LOGE(TAG, "Failed to create command queue");
@@ -104,14 +134,24 @@ esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const i
   led_strip_clear(led_strip);
 
   // Set the initial color
-  light->current_color = (RGB){0, 0, 0}; // Default to off
+  light->current_color = (rgb_t){0, 0, 0}; // Default to off
   for (int i = 0; i < light->strip_config.max_leds; i++) {
     led_strip_set_pixel(led_strip, i, light->current_color.red, light->current_color.green, light->current_color.blue);
   }
   led_strip_refresh(led_strip);
 
-  // Start the lights_task using FreeRTOS, pinned to core 0
-  if (xTaskCreatePinnedToCore(lights_task, "light_task", 4096, light, 5, NULL, 0) != pdPASS) {
+  // Start the lights_task using FreeRTOS
+  BaseType_t task_result = xTaskCreatePinnedToCore(
+    lights_task,                           // Task function
+    "light_task",                          // Name of the task
+    4096,                                  // Stack size in words
+    light,                                 // Task input parameter (ambient_light_t*)
+    CONFIG_LIGHT_CONTROLLER_TASK_PRIORITY, // Task priority
+    NULL,                                  // Task handle (not used)
+    CONFIG_LIGHT_CONTROLLER_TASK_CORE      // Core to run the task on
+  );
+
+  if (task_result != pdPASS) {
     ESP_LOGE(TAG, "Failed to create lights_task");
     return ESP_FAIL;
   }
