@@ -23,8 +23,6 @@ static const char *TAG = "can_sniffer";
 
 /* CAN sniffer FreeRTOS task function */
 void can_sniffer_task() {
-  uint8_t data[8];
-
   while (1) {
     /* Wait for the message to be received */
     twai_message_t message;
@@ -37,15 +35,17 @@ void can_sniffer_task() {
       continue;
     }
 
+    ESP_LOGD(TAG, "Received CAN message with identifier: 0x%" PRIx32, message.identifier);
+
     /* Process CAN bus messages */
     if (message.identifier == LIGHTS_CAN_ID) {
       if (memcmp(message.data, previous_light_data, message.data_length_code) != 0) {
         ESP_LOGI(TAG, "Received new lights CAN message");
 
+        /* Code for light stuff goes here */
+
         memcpy(previous_light_data, message.data, message.data_length_code);
       }
-
-      return;
     }
 
     if (message.identifier == DISPLAY_CAN_ID) {
@@ -81,7 +81,7 @@ void can_sniffer_task() {
             .data.step = {
               .num_steps = DEFAULT_SEQUENTIAL_STEPS,
               .delay_ms = DEFAULT_SEQUENTIAL_DELAY_MS,
-              .reverse = false
+              .reverse = true
             },
             .chained_command_queue = lights[DOOR_INDEX].command_queue,
             .chained_command = door_command
@@ -101,17 +101,32 @@ void can_sniffer_task() {
 
           command_t *door_command = calloc(1, sizeof(command_t));
           *door_command = (command_t) {
-            .type = COMMAND_TURN_OFF,
+            .type = COMMAND_FADE_TO,
+            .data.color = COLOR_OFF,
+            .data.step = {
+              .num_steps = DEFAULT_FADE_STEPS,
+              .delay_ms = DEFAULT_FADE_DELAY_MS,
+            },
           };
 
           command_t *center_command = calloc(1, sizeof(command_t));
           *center_command = (command_t) {
-            .type = COMMAND_TURN_OFF,
+            .type = COMMAND_FADE_TO,
+            .data.color = COLOR_OFF,
+            .data.step = {
+              .num_steps = DEFAULT_FADE_STEPS,
+              .delay_ms = DEFAULT_FADE_DELAY_MS,
+            },
           };
 
           command_t *dashboard_command = calloc(1, sizeof(command_t));
           *dashboard_command = (command_t) {
-            .type = COMMAND_TURN_OFF,
+            .type = COMMAND_FADE_TO,
+            .data.color = COLOR_OFF,
+            .data.step = {
+              .num_steps = DEFAULT_FADE_STEPS,
+              .delay_ms = DEFAULT_FADE_DELAY_MS,
+            },
           };
 
           /* Send commands to the queues */
@@ -131,8 +146,6 @@ void can_sniffer_task() {
 
         memcpy(previous_display_data, message.data, message.data_length_code);
       }
-
-      return;
     }
   }
 

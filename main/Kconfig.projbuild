@@ -25,19 +25,19 @@ endmenu
 menu "Ambient Lighting GPIO Configuration"
   config DASHBOARD_GPIO
     int "Dashboard GPIO"
-    default 21
+    default 12
     help
       GPIO pin number for the dashboard ambient light.
 
   config DASHBOARD_MAX_LEDS
     int "Dashboard Max LEDs"
-    default 110
+    default 75
     help
       Maximum number of LEDs for the dashboard ambient light.
 
   config CENTER_GPIO
     int "Center GPIO"
-    default 23
+    default 14
     help
       GPIO pin number for the center ambient light.
 
@@ -49,13 +49,13 @@ menu "Ambient Lighting GPIO Configuration"
 
   config DOOR_GPIO
     int "Door GPIO"
-    default 25
+    default 27
     help
       GPIO pin number for the door ambient light.
 
   config DOOR_MAX_LEDS
     int "Door Max LEDs"
-    default 110
+    default 75
     help
       Maximum number of LEDs for the door ambient light.
 endmenu

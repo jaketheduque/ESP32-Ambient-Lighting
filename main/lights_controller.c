@@ -41,7 +41,7 @@ void lights_task(void *arg) {
 
           /* Increment each LED brightness by number_steps until reaching current_color, then move to next LED */
           if (command->data.step.reverse) {
-            // Reverse order: start from the last LED and move to the first
+            /* Reverse order: start from the last LED and move to the first */
             for (int led_index = strip_config.max_leds - 1; led_index >= 0; led_index--) {
               for (int step = 0; step < command->data.step.num_steps; step++) {
                 temp_color.red = (light->current_color.red * (step + 1)) / command->data.step.num_steps;
@@ -54,7 +54,7 @@ void lights_task(void *arg) {
               }
             }
           } else {
-            // Normal order: start from the first LED and move to the last
+            /* Normal order: start from the first LED and move to the last */
             for (int led_index = 0; led_index < strip_config.max_leds; led_index++) {
               for (int step = 0; step < command->data.step.num_steps; step++) {
                 temp_color.red = (light->current_color.red * (step + 1)) / command->data.step.num_steps;
@@ -67,6 +67,43 @@ void lights_task(void *arg) {
               }
             }
           }
+
+          /* For good measure, set the entire strip to the new color */
+          for (int i = 0; i < strip_config.max_leds; i++) {
+            led_strip_set_pixel(led_strip, i, light->current_color.red, light->current_color.green, light->current_color.blue);
+          }
+          led_strip_refresh(led_strip);
+
+          break;
+        case COMMAND_FADE_TO:
+          int8_t red_step = ((int)command->data.color.red - (int)light->current_color.red) / command->data.step.num_steps;
+          int8_t green_step = ((int)command->data.color.green - (int)light->current_color.green) / command->data.step.num_steps;
+          int8_t blue_step = ((int)command->data.color.blue - (int)light->current_color.blue) / command->data.step.num_steps;
+
+          /* Fade each LED to the target color in steps */
+          for (int step = 0; step < command->data.step.num_steps; step++) {
+            rgb_t temp_color;
+            temp_color.red = light->current_color.red + (red_step * (step + 1));
+            temp_color.green = light->current_color.green + (green_step * (step + 1));
+            temp_color.blue = light->current_color.blue + (blue_step * (step + 1));
+
+            for (int i = 0; i < strip_config.max_leds; i++) {
+              led_strip_set_pixel(led_strip, i, temp_color.red, temp_color.green, temp_color.blue);
+            }
+
+            led_strip_refresh(led_strip);
+            vTaskDelay(pdMS_TO_TICKS(command->data.step.delay_ms));
+          }
+
+          /* Update the current color to the newly set color */
+          light->current_color = command->data.color;
+
+          /* For good measure, set the entire strip to the new color */
+          for (int i = 0; i < strip_config.max_leds; i++) {
+            led_strip_set_pixel(led_strip, i, light->current_color.red, light->current_color.green, light->current_color.blue);
+          }
+          led_strip_refresh(led_strip);
+
           break;
         case COMMAND_SET_COLOR:
           light->current_color = command->data.color;
@@ -107,20 +144,20 @@ void lights_task(void *arg) {
  * @return ESP_OK on success, or ESP_FAIL if initialization fails (e.g., queue or task creation fails).
  */
 esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const int max_leds) {
-  // Initialize the LED strip configuration
+  /* Initialize the LED strip configuration */
   light->strip_config.strip_gpio_num = gpio_num; // GPIO pin for the LED strip
   light->strip_config.max_leds = max_leds; // Number of LEDs in the strip
   light->strip_config.led_model = LED_MODEL_WS2812; // LED strip model
   light->strip_config.color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB; // Color format
   light->strip_config.flags.invert_out = false; // Do not invert output signal
 
-  // Initialize the RMT configuration
+  /* Initialize the RMT configuration */
   light->rmt_config.clk_src = RMT_CLK_SRC_DEFAULT; // Default clock source
   light->rmt_config.resolution_hz = 10 * 1000 * 1000; // RMT counter clock frequency: 10MHz
   light->rmt_config.mem_block_symbols = 64; // Memory size of each RMT channel
   light->rmt_config.flags.with_dma = false; // Disable DMA feature
 
-  // Create a command queue for handling commands
+  /* Create a command queue for handling commands */
   light->command_queue = xQueueCreate(10, sizeof(command_t*));
   
   if (light->command_queue == NULL) {
@@ -128,19 +165,15 @@ esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const i
     return ESP_FAIL; // Return error if queue creation fails
   }
 
-  // Initialize the LED strip
+  /* Initialize the LED strip */
   led_strip_handle_t led_strip;
   ESP_ERROR_CHECK(led_strip_new_rmt_device(&light->strip_config, &light->rmt_config, &led_strip));
   led_strip_clear(led_strip);
 
-  // Set the initial color
-  light->current_color = (rgb_t){0, 0, 0}; // Default to off
-  for (int i = 0; i < light->strip_config.max_leds; i++) {
-    led_strip_set_pixel(led_strip, i, light->current_color.red, light->current_color.green, light->current_color.blue);
-  }
-  led_strip_refresh(led_strip);
+  /* Set the initial color */
+  light->current_color = (rgb_t) START_COLOR;  
 
-  // Start the lights_task using FreeRTOS
+  /* Start the lights_task using FreeRTOS */
   BaseType_t task_result = xTaskCreatePinnedToCore(
     lights_task,                           // Task function
     "light_task",                          // Name of the task
