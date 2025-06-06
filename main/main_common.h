@@ -46,7 +46,7 @@ typedef struct {
   rgb_t current_color;
 } ambient_light_t;
 
-/* Macros */
+/* General Macros */
 #define NUM_LIGHTS 3
 
 #define DASHBOARD_INDEX 0
@@ -58,8 +58,8 @@ typedef struct {
 #define DEFAULT_SEQUENTIAL_STEPS 2
 #define DEFAULT_SEQUENTIAL_DELAY_MS 20
 
-#define START_COLOR {100, 100, 100}
-#define COLOR_OFF {0, 0, 0}
+#define START_COLOR (rgb_t) {100, 100, 100}
+#define COLOR_OFF (rgb_t) {0, 0, 0}
 
 #define DISPLAY_CAN_ID 0x3B3
 #define DISPLAY_STATUS_BYTE_INDEX 2

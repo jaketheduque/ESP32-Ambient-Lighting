@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 
 #include "main_common.h"
+#include "commands.c"
 
 /* TWAI configuration */
 static twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
@@ -40,9 +41,35 @@ void can_sniffer_task() {
     /* Process CAN bus messages */
     if (message.identifier == LIGHTS_CAN_ID) {
       if (memcmp(message.data, previous_light_data, message.data_length_code) != 0) {
-        ESP_LOGI(TAG, "Received new lights CAN message");
+        /* If ambient lighting has turned on, turn on lights*/
+        if (message.data[AMBIENT_LIGHT_BYTE_INDEX] && (previous_light_data[AMBIENT_LIGHT_BYTE_INDEX] == 0)) {
+          ESP_LOGI(TAG, "Ambient lighting has turned on");
 
-        /* Code for light stuff goes here */
+          command_t *door_command = create_default_sequential_command(false);
+          command_t *center_command = create_default_sequential_command(false);
+
+          command_t *dashboard_command = create_default_sequential_command(true);
+          dashboard_command->chained_command_queue = lights[DOOR_INDEX].command_queue;
+          dashboard_command->chained_command = door_command;
+
+          /* Send commands to the queues */
+          xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
+          xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+        }
+
+        /* If ambient lighting has turned off, turn off lights */
+        if ((message.data[AMBIENT_LIGHT_BYTE_INDEX] == 0) && previous_light_data[AMBIENT_LIGHT_BYTE_INDEX]) {
+          ESP_LOGI(TAG, "Ambient lighting has turned off");
+
+          command_t* door_command = create_default_fade_to_command(COLOR_OFF);
+          command_t* center_command = create_default_fade_to_command(COLOR_OFF);
+          command_t* dashboard_command = create_default_fade_to_command(COLOR_OFF);
+
+          /* Send commands to the queues */
+          xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
+          xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+          xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
+        }
 
         memcpy(previous_light_data, message.data, message.data_length_code);
       }
@@ -50,99 +77,6 @@ void can_sniffer_task() {
 
     if (message.identifier == DISPLAY_CAN_ID) {
       if (memcmp(message.data, previous_display_data, message.data_length_code) != 0) {
-        ESP_LOGI(TAG, "Received new display CAN message");
-
-        if (RISING_CHANGE(message.data[DISPLAY_STATUS_BYTE_INDEX], previous_display_data[DISPLAY_STATUS_BYTE_INDEX], DISPLAY_POWER_MASK)) {
-          ESP_LOGI(TAG, "Display has powered on");
-
-          command_t *door_command = calloc(1, sizeof(command_t));
-          *door_command = (command_t) {
-            .type = COMMAND_SEQUENTIAL,
-            .data.step = {
-              .num_steps = DEFAULT_SEQUENTIAL_STEPS,
-              .delay_ms = DEFAULT_SEQUENTIAL_DELAY_MS,
-              .reverse = false
-            },
-          };
-
-          command_t *center_command = calloc(1, sizeof(command_t));
-          *center_command = (command_t) {
-            .type = COMMAND_SEQUENTIAL,
-            .data.step = {
-              .num_steps = DEFAULT_SEQUENTIAL_STEPS,
-              .delay_ms = DEFAULT_SEQUENTIAL_DELAY_MS,
-              .reverse = false
-            },
-          };
-
-          command_t *dashboard_command = calloc(1, sizeof(command_t));
-          *dashboard_command = (command_t) {
-            .type = COMMAND_SEQUENTIAL,
-            .data.step = {
-              .num_steps = DEFAULT_SEQUENTIAL_STEPS,
-              .delay_ms = DEFAULT_SEQUENTIAL_DELAY_MS,
-              .reverse = true
-            },
-            .chained_command_queue = lights[DOOR_INDEX].command_queue,
-            .chained_command = door_command
-          };
-
-          /* Send commands to the queues */
-          if (xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY) != pdTRUE) {
-            ESP_LOGE(TAG, "Failed to send center command to queue");
-            free(center_command);
-          }
-          if (xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY) != pdTRUE) {
-            ESP_LOGE(TAG, "Failed to send dashboard command to queue");
-            free(dashboard_command);
-          }
-        } else if (FALLING_CHANGE(message.data[DISPLAY_STATUS_BYTE_INDEX], previous_display_data[DISPLAY_STATUS_BYTE_INDEX], DISPLAY_POWER_MASK)) {
-          ESP_LOGI(TAG, "Display has powered off");
-
-          command_t *door_command = calloc(1, sizeof(command_t));
-          *door_command = (command_t) {
-            .type = COMMAND_FADE_TO,
-            .data.color = COLOR_OFF,
-            .data.step = {
-              .num_steps = DEFAULT_FADE_STEPS,
-              .delay_ms = DEFAULT_FADE_DELAY_MS,
-            },
-          };
-
-          command_t *center_command = calloc(1, sizeof(command_t));
-          *center_command = (command_t) {
-            .type = COMMAND_FADE_TO,
-            .data.color = COLOR_OFF,
-            .data.step = {
-              .num_steps = DEFAULT_FADE_STEPS,
-              .delay_ms = DEFAULT_FADE_DELAY_MS,
-            },
-          };
-
-          command_t *dashboard_command = calloc(1, sizeof(command_t));
-          *dashboard_command = (command_t) {
-            .type = COMMAND_FADE_TO,
-            .data.color = COLOR_OFF,
-            .data.step = {
-              .num_steps = DEFAULT_FADE_STEPS,
-              .delay_ms = DEFAULT_FADE_DELAY_MS,
-            },
-          };
-
-          /* Send commands to the queues */
-          if (xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY) != pdTRUE) {
-            ESP_LOGE(TAG, "Failed to send center command to queue");
-            free(center_command);
-          }
-          if (xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY) != pdTRUE) {
-            ESP_LOGE(TAG, "Failed to send dashboard command to queue");
-            free(dashboard_command);
-          }
-          if (xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY) != pdTRUE) {
-            ESP_LOGE(TAG, "Failed to send door command to queue");
-            free(door_command);
-          }
-        }
 
         memcpy(previous_display_data, message.data, message.data_length_code);
       }
