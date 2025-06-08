@@ -2,12 +2,15 @@
 #define MAIN_COMMON_H
 
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
 #include <led_strip.h>
 
-/* Enums */
+/* =========================
+ *        ENUMERATIONS
+ * ========================= */
 typedef enum {
   COMMAND_TURN_OFF,
   COMMAND_TURN_ON, /* Turns on the lights with the current color set in ambient_light_t, can also be used to "refresh" after color change */
@@ -16,7 +19,9 @@ typedef enum {
   COMMAND_FADE_TO,
 } CommandType;
 
-/* Structs */
+/* =========================
+ *         STRUCTS
+ * ========================= */
 typedef struct {
   uint8_t red;
   uint8_t green;
@@ -46,7 +51,9 @@ typedef struct {
   rgb_t current_color;
 } ambient_light_t;
 
-/* General Macros */
+/* =========================
+ *        GENERAL MACROS
+ * ========================= */
 #define NUM_LIGHTS 3
 
 #define DASHBOARD_INDEX 0
@@ -80,10 +87,20 @@ typedef struct {
 #define RISING_CHANGE(current, previous, bit_mask) (((current) & (bit_mask)) && !((previous) & (bit_mask)))
 #define FALLING_CHANGE(current, previous, bit_mask) (!((current) & (bit_mask)) && ((previous) & (bit_mask)))
 
-/* Shared Members */
+/* =========================================================
+ *                  SHARED GLOBAL MEMBERS
+ * ========================================================= */
 extern ambient_light_t lights[NUM_LIGHTS];
+extern SemaphoreHandle_t current_color_lock;
+/**
+ * @note Access to current_color must be protected by taking the appropriate semaphore
+ *       before entering the critical section to ensure thread safety.
+ */
+extern rgb_t current_color;
 
-/* Functions */
+/* =========================================================
+ *                      FUNCTIONS
+ * ========================================================= */
 esp_err_t start_can_sniffer_task();
 esp_err_t start_http_server_task();
 esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const int max_leds);

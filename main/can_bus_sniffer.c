@@ -41,20 +41,47 @@ void can_sniffer_task() {
     /* Process CAN bus messages */
     if (message.identifier == LIGHTS_CAN_ID) {
       if (memcmp(message.data, previous_light_data, message.data_length_code) != 0) {
-        /* If ambient lighting has turned on, turn on lights*/
+        /**
+         * There are two different cases for turning on the ambient lights:
+         * 1) Display is off, meaning that this is a "full car" start, leading to the sequential animation
+         * 2) Display is on, meaning that this is an ambient light only event, leading to a fade animation
+         */
         if (message.data[AMBIENT_LIGHT_BYTE_INDEX] && (previous_light_data[AMBIENT_LIGHT_BYTE_INDEX] == 0)) {
-          ESP_LOGI(TAG, "Ambient lighting has turned on");
+          if (previous_display_data[DISPLAY_STATUS_BYTE_INDEX] & DISPLAY_POWER_MASK) {
+            ESP_LOGI(TAG, "Ambient lighting has turned on");
 
-          command_t *door_command = create_default_sequential_command(false);
-          command_t *center_command = create_default_sequential_command(false);
+            xSemaphoreTake(current_color_lock, portMAX_DELAY);
+            command_t* door_command = create_default_fade_to_command(current_color);
+            command_t* center_command = create_default_fade_to_command(current_color);
+            command_t* dashboard_command = create_default_fade_to_command(current_color);
+            xSemaphoreGive(current_color_lock);
 
-          command_t *dashboard_command = create_default_sequential_command(true);
-          dashboard_command->chained_command_queue = lights[DOOR_INDEX].command_queue;
-          dashboard_command->chained_command = door_command;
+            xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
+            xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+            xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
+          } else {
+            ESP_LOGI(TAG, "Ambient lighting has turned on, full car start detected");
 
-          /* Send commands to the queues */
-          xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
-          xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+            xSemaphoreTake(current_color_lock, portMAX_DELAY);
+            command_t* door_command = create_default_set_color_command(current_color);
+            command_t* center_command = create_default_set_color_command(current_color);
+            command_t* dashboard_command = create_default_set_color_command(current_color);
+            xSemaphoreGive(current_color_lock);
+
+            xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
+            xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+            xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
+
+            door_command = create_default_sequential_command(false);
+            center_command = create_default_sequential_command(false);
+            dashboard_command = create_default_sequential_command(false);
+
+            dashboard_command->chained_command_queue = lights[DOOR_INDEX].command_queue;
+            dashboard_command->chained_command = door_command;
+
+            xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
+            xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+          }
         }
 
         /* If ambient lighting has turned off, turn off lights */

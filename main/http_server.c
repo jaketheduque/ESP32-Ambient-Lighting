@@ -111,28 +111,10 @@ esp_err_t post_handler(httpd_req_t *req) {
       return ESP_FAIL;
     }
 
-    if (color.red == 0 && color.green == 0 && color.blue == 0) {
-      command->type = COMMAND_TURN_OFF;
-    } else {
-      command->type = COMMAND_SET_COLOR;
-      command->data.color = color;
-    }
-
-    for (int i = 0; i < NUM_LIGHTS; i++) {
-      command_t* temp_command = calloc(1, sizeof(command_t));
-      *temp_command = *command; // Copy command data
-
-      /* Send command to the queue */
-      if (xQueueSend(lights[i].command_queue, &temp_command, portMAX_DELAY) != pdTRUE) {
-        ESP_LOGE(TAG, "Failed to send command to queue");
-        free(temp_command);
-        free(command);
-        return ESP_FAIL;
-      }
-    }
-
-    free(command);
-    command = NULL;
+    /* Update current color of ambient lighting */
+    xSemaphoreTake(current_color_lock, portMAX_DELAY);
+    current_color = color;
+    xSemaphoreGive(current_color_lock);
 
     return ESP_OK;
 }

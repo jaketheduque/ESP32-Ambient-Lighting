@@ -25,8 +25,10 @@ void lights_task(void *arg) {
       switch (command->type) {
         case COMMAND_TURN_OFF:
           led_strip_clear(led_strip);
+          light->current_color = COLOR_OFF;
           break;
         case COMMAND_TURN_ON:
+          light->current_color = command->data.color;
           for (int i = 0 ; i < strip_config.max_leds ; i++) {
               led_strip_set_pixel(led_strip, i, light->current_color.red, light->current_color.green, light->current_color.blue);
           }
@@ -36,6 +38,9 @@ void lights_task(void *arg) {
           /* Reset LED strip before sequential animation */
           led_strip_clear(led_strip);
           led_strip_refresh(led_strip);
+
+          /* Set current color to data color */
+          light->current_color = command->data.color;
 
           rgb_t temp_color = {0, 0, 0};
 
@@ -171,7 +176,7 @@ esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const i
   led_strip_clear(led_strip);
 
   /* Set the initial color */
-  light->current_color = (rgb_t) START_COLOR;  
+  light->current_color = START_COLOR;  
 
   /* Start the lights_task using FreeRTOS */
   BaseType_t task_result = xTaskCreatePinnedToCore(
