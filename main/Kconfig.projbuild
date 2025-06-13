@@ -35,21 +35,9 @@ menu "Ambient Lighting GPIO Configuration"
     help
       Maximum number of LEDs for the dashboard ambient light.
 
-  config CENTER_GPIO
-    int "Center GPIO"
-    default 14
-    help
-      GPIO pin number for the center ambient light.
-
-  config CENTER_MAX_LEDS
-    int "Center Max LEDs"
-    default 110
-    help
-      Maximum number of LEDs for the center ambient light.
-
   config DOOR_GPIO
     int "Door GPIO"
-    default 27
+    default 14
     help
       GPIO pin number for the door ambient light.
 

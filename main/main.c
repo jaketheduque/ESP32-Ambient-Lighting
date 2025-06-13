@@ -25,7 +25,6 @@ void app_main(void)
 
   ESP_LOGI(TAG, "Starting light tasks...");
   init_ambient_light(&lights[DASHBOARD_INDEX], CONFIG_DASHBOARD_GPIO, CONFIG_DASHBOARD_MAX_LEDS);
-  init_ambient_light(&lights[CENTER_INDEX], CONFIG_CENTER_GPIO, CONFIG_CENTER_MAX_LEDS);
   init_ambient_light(&lights[DOOR_INDEX], CONFIG_DOOR_GPIO, CONFIG_DOOR_MAX_LEDS);
 
   ESP_LOGI(TAG, "Starting HTTP and CAN sniffer...");

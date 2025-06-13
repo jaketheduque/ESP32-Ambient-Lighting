@@ -54,11 +54,10 @@ typedef struct {
 /* =========================
  *        GENERAL MACROS
  * ========================= */
-#define NUM_LIGHTS 3
+#define NUM_LIGHTS 2
 
 #define DASHBOARD_INDEX 0
-#define CENTER_INDEX 1
-#define DOOR_INDEX 2
+#define DOOR_INDEX 1
 
 #define DEFAULT_FADE_STEPS 20
 #define DEFAULT_FADE_DELAY_MS 20

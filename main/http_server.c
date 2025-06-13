@@ -104,13 +104,6 @@ esp_err_t post_handler(httpd_req_t *req) {
     /* Deallocate JSON data */
     cJSON_Delete(json);
 
-    /* Create command and add to queue */
-    command_t *command = calloc(1, sizeof(command_t));
-    if (!command) {
-      ESP_LOGE(TAG, "Failed to allocate memory for command");
-      return ESP_FAIL;
-    }
-
     /* Update current color of ambient lighting */
     xSemaphoreTake(current_color_lock, portMAX_DELAY);
     current_color = color;

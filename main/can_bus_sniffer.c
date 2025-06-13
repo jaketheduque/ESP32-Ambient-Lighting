@@ -36,11 +36,13 @@ void can_sniffer_task() {
       continue;
     }
 
-    ESP_LOGD(TAG, "Received CAN message with identifier: 0x%" PRIx32, message.identifier);
+    ESP_LOGV(TAG, "Received CAN message with identifier: 0x%" PRIx32, message.identifier);
 
     /* Process CAN bus messages */
     if (message.identifier == LIGHTS_CAN_ID) {
       if (memcmp(message.data, previous_light_data, message.data_length_code) != 0) {
+        ESP_LOGD(TAG, "New lights CAN message received");
+
         /**
          * There are two different cases for turning on the ambient lights:
          * 1) Display is off, meaning that this is a "full car" start, leading to the sequential animation
@@ -52,11 +54,9 @@ void can_sniffer_task() {
 
             xSemaphoreTake(current_color_lock, portMAX_DELAY);
             command_t* door_command = create_default_fade_to_command(current_color);
-            command_t* center_command = create_default_fade_to_command(current_color);
             command_t* dashboard_command = create_default_fade_to_command(current_color);
             xSemaphoreGive(current_color_lock);
 
-            xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
             xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
             xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
           } else {
@@ -64,22 +64,18 @@ void can_sniffer_task() {
 
             xSemaphoreTake(current_color_lock, portMAX_DELAY);
             command_t* door_command = create_default_set_color_command(current_color);
-            command_t* center_command = create_default_set_color_command(current_color);
             command_t* dashboard_command = create_default_set_color_command(current_color);
             xSemaphoreGive(current_color_lock);
 
-            xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
             xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
             xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
 
             door_command = create_default_sequential_command(false);
-            center_command = create_default_sequential_command(false);
             dashboard_command = create_default_sequential_command(false);
 
             dashboard_command->chained_command_queue = lights[DOOR_INDEX].command_queue;
             dashboard_command->chained_command = door_command;
 
-            xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
             xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
           }
         }
@@ -89,11 +85,9 @@ void can_sniffer_task() {
           ESP_LOGI(TAG, "Ambient lighting has turned off");
 
           command_t* door_command = create_default_fade_to_command(COLOR_OFF);
-          command_t* center_command = create_default_fade_to_command(COLOR_OFF);
           command_t* dashboard_command = create_default_fade_to_command(COLOR_OFF);
 
           /* Send commands to the queues */
-          xQueueSend(lights[CENTER_INDEX].command_queue, &center_command, portMAX_DELAY);
           xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
           xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
         }
@@ -104,6 +98,7 @@ void can_sniffer_task() {
 
     if (message.identifier == DISPLAY_CAN_ID) {
       if (memcmp(message.data, previous_display_data, message.data_length_code) != 0) {
+        ESP_LOGD(TAG, "New display CAN message received");
 
         memcpy(previous_display_data, message.data, message.data_length_code);
       }
