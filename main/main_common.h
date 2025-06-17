@@ -1,12 +1,20 @@
 #ifndef MAIN_COMMON_H
 #define MAIN_COMMON_H
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
+
+#include <stdio.h>
+#include <string.h>
 #include <led_strip.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 /* =========================
  *        ENUMERATIONS

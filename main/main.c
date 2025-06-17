@@ -1,10 +1,3 @@
-#include <stdio.h>
-#include <string.h>
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "driver/gpio.h"
-
 #include "main_common.h"
 
 static const char* TAG = "main";
@@ -22,6 +15,7 @@ void app_main(void)
     ESP_LOGE(TAG, "Failed to create current color mutex");
     return;
   }
+  xSemaphoreGive(current_color_lock); // Initialize the semaphore to be available
 
   ESP_LOGI(TAG, "Starting light tasks...");
   init_ambient_light(&lights[DASHBOARD_INDEX], CONFIG_DASHBOARD_GPIO, CONFIG_DASHBOARD_MAX_LEDS);
