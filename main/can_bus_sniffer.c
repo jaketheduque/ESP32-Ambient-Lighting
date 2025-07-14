@@ -45,11 +45,11 @@ void can_sniffer_task() {
 
         /**
          * There are two different cases for turning on the ambient lights:
-         * 1) Display is off, meaning that this is a "full car" start, leading to the sequential animation
+         * 1) Display is off, meaning that this lights should wait until display goes into the standard UI (refer to display CAN section)
          * 2) Display is on, meaning that this is an ambient light only event, leading to a fade animation
          */
         if (message.data[AMBIENT_LIGHT_BYTE_INDEX] && (previous_light_data[AMBIENT_LIGHT_BYTE_INDEX] == 0)) {
-          if (previous_display_data[DISPLAY_STATUS_BYTE_INDEX] & DISPLAY_POWER_MASK) {
+          if (previous_display_data[DISPLAY_STATUS_BYTE_INDEX] == DISPLAY_STANDARD_UI_VAL) {
             ESP_LOGI(TAG, "Ambient lighting has turned on");
 
             xSemaphoreTake(current_color_lock, portMAX_DELAY);
@@ -59,9 +59,43 @@ void can_sniffer_task() {
 
             xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
             xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
-          } else {
-            ESP_LOGI(TAG, "Ambient lighting has turned on, full car start detected");
+          }
+        }
 
+        /* If ambient lighting has turned off, turn off lights */
+        if ((message.data[AMBIENT_LIGHT_BYTE_INDEX] == 0) && previous_light_data[AMBIENT_LIGHT_BYTE_INDEX]) {
+          ESP_LOGI(TAG, "Ambient lighting has turned off");
+
+          command_t* door_command = create_default_fade_to_command(COLOR_OFF);
+          command_t* dashboard_command = create_default_fade_to_command(COLOR_OFF);
+
+          /* Send commands to the queues */
+          xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+          xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
+        }
+
+        char data_str[3 * TWAI_FRAME_MAX_DLC] = {0};
+        int offset = 0;
+        for (int i = 0; i < message.data_length_code; ++i) {
+            offset += snprintf(data_str + offset, sizeof(data_str) - offset, "%02X ", message.data[i]);
+        }
+        ESP_LOGD(TAG, "Lights CAN message data: %s", data_str);
+
+        memcpy(previous_light_data, message.data, message.data_length_code);
+      }
+    }
+
+    if (message.identifier == DISPLAY_CAN_ID) {
+      if (memcmp(message.data, previous_display_data, message.data_length_code) != 0) {
+        ESP_LOGD(TAG, "New display CAN message received");
+
+        if ((message.data[DISPLAY_STATUS_BYTE_INDEX] == DISPLAY_STANDARD_UI_VAL) && (previous_display_data[DISPLAY_STATUS_BYTE_INDEX] != DISPLAY_STANDARD_UI_VAL)) {
+          ESP_LOGI(TAG, "Display swapped to normal UI");
+
+          /* If lights are already on, then skip */
+          if (lights[0].current_color.red == COLOR_OFF.red && 
+              lights[0].current_color.green == COLOR_OFF.green && 
+              lights[0].current_color.blue == COLOR_OFF.blue) {
             xSemaphoreTake(current_color_lock, portMAX_DELAY);
             command_t* door_command = create_default_set_color_command(current_color);
             command_t* dashboard_command = create_default_set_color_command(current_color);
@@ -79,29 +113,16 @@ void can_sniffer_task() {
             xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
           }
         }
-
-        /* If ambient lighting has turned off, turn off lights */
-        if ((message.data[AMBIENT_LIGHT_BYTE_INDEX] == 0) && previous_light_data[AMBIENT_LIGHT_BYTE_INDEX]) {
-          ESP_LOGI(TAG, "Ambient lighting has turned off");
-
-          command_t* door_command = create_default_fade_to_command(COLOR_OFF);
-          command_t* dashboard_command = create_default_fade_to_command(COLOR_OFF);
-
-          /* Send commands to the queues */
-          xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
-          xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
-        }
-
-        memcpy(previous_light_data, message.data, message.data_length_code);
       }
-    }
 
-    if (message.identifier == DISPLAY_CAN_ID) {
-      if (memcmp(message.data, previous_display_data, message.data_length_code) != 0) {
-        ESP_LOGD(TAG, "New display CAN message received");
-
-        memcpy(previous_display_data, message.data, message.data_length_code);
+      char data_str[3 * TWAI_FRAME_MAX_DLC] = {0};
+      int offset = 0;
+      for (int i = 0; i < message.data_length_code; ++i) {
+          offset += snprintf(data_str + offset, sizeof(data_str) - offset, "%02X ", message.data[i]);
       }
+      ESP_LOGD(TAG, "Display CAN message data: %s", data_str);
+
+      memcpy(previous_display_data, message.data, message.data_length_code);
     }
   }
 
