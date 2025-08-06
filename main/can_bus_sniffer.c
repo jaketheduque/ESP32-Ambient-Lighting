@@ -93,19 +93,9 @@ void can_sniffer_task() {
           ESP_LOGI(TAG, "Display swapped to normal UI");
 
           /* If lights are already on, then skip */
-          if (lights[0].current_color.red == COLOR_OFF.red && 
-              lights[0].current_color.green == COLOR_OFF.green && 
-              lights[0].current_color.blue == COLOR_OFF.blue) {
-            xSemaphoreTake(current_color_lock, portMAX_DELAY);
-            command_t* door_command = create_default_set_color_command(current_color);
-            command_t* dashboard_command = create_default_set_color_command(current_color);
-            xSemaphoreGive(current_color_lock);
-
-            xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
-            xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
-
-            door_command = create_default_sequential_command(false);
-            dashboard_command = create_default_sequential_command(false);
+          if (lights[0].state == LIGHT_ON) {
+            command_t* door_command = create_default_sequential_command(current_color, false);
+            command_t* dashboard_command = create_default_sequential_command(current_color, false);
 
             dashboard_command->chained_command_queue = lights[DOOR_INDEX].command_queue;
             dashboard_command->chained_command = door_command;

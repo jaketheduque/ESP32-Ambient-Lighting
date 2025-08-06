@@ -32,41 +32,21 @@ command_t* create_default_fade_to_command(rgb_t color_value) {
  * are set to their default values, and the direction (reverse or not)
  * is set according to the input parameter.
  *
+ * @param color The RGB color to be used in the sequential command.
  * @param reverse If true, the sequential command will be set to reverse order.
  * @return Pointer to the newly allocated command_t structure, or NULL if allocation fails.
  *
  * @note The allocated memory must be freed by the caller to avoid memory leaks.
  */
-command_t* create_default_sequential_command(bool reverse) {
+command_t* create_default_sequential_command(rgb_t color, bool reverse) {
   command_t *cmd = calloc(1, sizeof(command_t));
   if (!cmd) {
     return NULL;
   }
   cmd->type = COMMAND_SEQUENTIAL;
-  cmd->data.color = START_COLOR; // Default color for sequential command TODO change later
+  cmd->data.color = color;
   cmd->data.step.num_steps = DEFAULT_SEQUENTIAL_STEPS;
   cmd->data.step.delay_ms = DEFAULT_SEQUENTIAL_DELAY_MS;
   cmd->data.step.reverse = reverse;
-  return cmd;
-}
-
-/**
- * @brief Creates a new command to set the color to the specified RGB value.
- *
- * Allocates and initializes a command_t structure with the type set to COMMAND_SET_COLOR
- * and the color data set to the provided rgb_t value.
- *
- * @param color_value The RGB color value to set in the command.
- * @return Pointer to the newly allocated command_t structure, or NULL if allocation fails.
- *
- * @note The allocated memory must be freed by the caller to avoid memory leaks.
- */
-command_t* create_default_set_color_command(rgb_t color_value) {
-  command_t *cmd = calloc(1, sizeof(command_t));
-  if (!cmd) {
-    return NULL;
-  }
-  cmd->type = COMMAND_SET_COLOR;
-  cmd->data.color = color_value;
   return cmd;
 }

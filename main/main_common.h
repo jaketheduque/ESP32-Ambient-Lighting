@@ -27,6 +27,11 @@ typedef enum {
   COMMAND_FADE_TO,
 } CommandType;
 
+typedef enum {
+  LIGHT_ON,
+  LIGHT_OFF,
+} LightState;
+
 /* =========================
  *         STRUCTS
  * ========================= */
@@ -56,7 +61,7 @@ typedef struct {
   led_strip_config_t strip_config;
   led_strip_rmt_config_t rmt_config;
   QueueHandle_t command_queue;
-  rgb_t current_color;
+  LightState state;
 } ambient_light_t;
 
 /* =========================
