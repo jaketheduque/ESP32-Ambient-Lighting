@@ -49,7 +49,7 @@ void can_sniffer_task() {
          * 2) Display is on, meaning that this is an ambient light only event, leading to a fade animation
          */
         if (message.data[AMBIENT_LIGHT_BYTE_INDEX] && (previous_light_data[AMBIENT_LIGHT_BYTE_INDEX] == 0)) {
-          if (previous_display_data[DISPLAY_STATUS_BYTE_INDEX] == DISPLAY_STANDARD_UI_VAL) {
+          if (previous_display_data[DISPLAY_STATUS_BYTE_INDEX] & DISPLAY_STANDARD_UI_MASK) {
             ESP_LOGI(TAG, "Ambient lighting has turned on");
 
             xSemaphoreTake(current_color_lock, portMAX_DELAY);
@@ -89,7 +89,7 @@ void can_sniffer_task() {
       if (memcmp(message.data, previous_display_data, message.data_length_code) != 0) {
         ESP_LOGD(TAG, "New display CAN message received");
 
-        if ((message.data[DISPLAY_STATUS_BYTE_INDEX] == DISPLAY_STANDARD_UI_VAL) && (previous_display_data[DISPLAY_STATUS_BYTE_INDEX] != DISPLAY_STANDARD_UI_VAL)) {
+        if ((message.data[DISPLAY_STATUS_BYTE_INDEX] & DISPLAY_STANDARD_UI_MASK) && !(previous_display_data[DISPLAY_STATUS_BYTE_INDEX] & DISPLAY_STANDARD_UI_MASK)) {
           ESP_LOGI(TAG, "Display swapped to normal UI");
 
           /* If lights are already on, then skip */
@@ -113,16 +113,16 @@ void can_sniffer_task() {
             xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
           }
         }
-      }
 
-      char data_str[3 * TWAI_FRAME_MAX_DLC] = {0};
-      int offset = 0;
-      for (int i = 0; i < message.data_length_code; ++i) {
-          offset += snprintf(data_str + offset, sizeof(data_str) - offset, "%02X ", message.data[i]);
-      }
-      ESP_LOGD(TAG, "Display CAN message data: %s", data_str);
+        char data_str[3 * TWAI_FRAME_MAX_DLC] = {0};
+        int offset = 0;
+        for (int i = 0; i < message.data_length_code; ++i) {
+            offset += snprintf(data_str + offset, sizeof(data_str) - offset, "%02X ", message.data[i]);
+        }
+        ESP_LOGD(TAG, "Display CAN message data: %s", data_str);
 
-      memcpy(previous_display_data, message.data, message.data_length_code);
+        memcpy(previous_display_data, message.data, message.data_length_code);
+      }
     }
   }
 
