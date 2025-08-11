@@ -93,7 +93,7 @@ void can_sniffer_task() {
           ESP_LOGI(TAG, "Display swapped to normal UI");
 
           /* If lights are already on, then skip */
-          if (lights[0].state == LIGHT_ON) {
+          if (lights[0].state != LIGHT_ON) {
             command_t* door_command = create_default_sequential_command(current_color, false);
             command_t* dashboard_command = create_default_sequential_command(current_color, false);
 

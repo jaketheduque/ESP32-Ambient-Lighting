@@ -175,6 +175,7 @@ esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const i
   led_strip_handle_t led_strip;
   ESP_ERROR_CHECK(led_strip_new_rmt_device(&light->strip_config, &light->rmt_config, &led_strip));
   led_strip_clear(led_strip);
+  light->state = LIGHT_OFF;
 
   /* Start the lights_task using FreeRTOS */
   BaseType_t task_result = xTaskCreatePinnedToCore(
