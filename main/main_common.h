@@ -22,7 +22,6 @@
 typedef enum {
   COMMAND_TURN_OFF,
   COMMAND_TURN_ON, /* Turns on the lights with the current color set in ambient_light_t, can also be used to "refresh" after color change */
-  COMMAND_SET_COLOR, /* Only sets the current color of the ambient_light_t, another command is required to turn on the lights */
   COMMAND_SEQUENTIAL,
   COMMAND_FADE_TO,
 } CommandType;
