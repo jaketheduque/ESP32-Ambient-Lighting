@@ -239,6 +239,14 @@ Each LED strip is controlled using a `ambient_light_t` struct, containing member
 2) When a command is available on the command queue, the task dedicated to controlling the ambient light will call the appropriate `led_strip` functions to control the LED strip specified in the `ambient_light_t` struct.
     - An array of `ambient_light_t` handles is shared in `main_common.h` so that any class is able to send commands to the LED strips, assuming that `ambient_light_t` has been initialized correctly. This is utilized for the startup animation where the dashboard LEDs, after completion of their animation, start the sequential animation for the door LEDs, among other things. For simplicity, a common `rgb_t` is also shared so that the HTTP server only has to update one color to ensure all lights are the same color.
 
+The general logic for controlling lights is below,
+- If the display goes from any non-normal state (off, sentry, etc.) to normal UI, then turn on the lights with the startup sequential animation
+  - This prevents the full startup animation from starting if the lights are turned on/off while the car is "operational" (ex. while driving) since the animation can be a bit distracting
+- If the ambient lighting brightness goes from non-zero to zero while the display is in normal UI mode, then fade the lights off
+- Likewise, if the ambient lighting brightness goes from zero to non-zero while the display is in normal UI mode, then fade the lights to the currently set color
+  - This allows for the lights to be controlled using the "Ambient Lights" button in the "Lights" vehicle control menu just like the OEM ones (ex. one driver profile can have the ambient lights turned off, while another can have them on)
+  
+
 # Schematic and Custom PCB
 ![Schematic](assets/Tesla%20Ambient%20Lighting-1751386897733.png)
 ![PCB Layout](assets/Tesla%20Ambient%20Lighting-1751386955666.png)
