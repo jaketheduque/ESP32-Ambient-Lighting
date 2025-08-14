@@ -28,6 +28,7 @@ typedef enum {
 
 typedef enum {
   LIGHT_ON,
+  LIGHT_TRANSITIONING,
   LIGHT_OFF,
 } LightState;
 

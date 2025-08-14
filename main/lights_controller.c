@@ -24,11 +24,13 @@ void lights_task(void *arg) {
     if (xQueueReceive(light->command_queue, &command, portMAX_DELAY)) {
       switch (command->type) {
         case COMMAND_TURN_OFF:
+          light->state = LIGHT_OFF;
           led_strip_clear(led_strip);
 
-          light->state = LIGHT_OFF;
           break;
         case COMMAND_TURN_ON:
+          light->state = LIGHT_ON;
+
           for (int i = 0 ; i < strip_config.max_leds ; i++) {
               led_strip_set_pixel(led_strip, i, 
                 command->data.color.red, 
@@ -37,9 +39,10 @@ void lights_task(void *arg) {
           }
           led_strip_refresh(led_strip);
 
-          light->state = LIGHT_ON;
           break;
         case COMMAND_SEQUENTIAL:
+          light->state = LIGHT_TRANSITIONING;
+
           /* Reset LED strip before sequential animation */
           led_strip_clear(led_strip);
           led_strip_refresh(led_strip);
@@ -85,8 +88,11 @@ void lights_task(void *arg) {
           led_strip_refresh(led_strip);
 
           light->state = LIGHT_ON;
+
           break;
         case COMMAND_FADE_TO:
+          light->state = LIGHT_TRANSITIONING;
+
           int8_t red_step = ((int)command->data.color.red - (int)command->data.color.red) / command->data.step.num_steps;
           int8_t green_step = ((int)command->data.color.green - (int)command->data.color.green) / command->data.step.num_steps;
           int8_t blue_step = ((int)command->data.color.blue - (int)command->data.color.blue) / command->data.step.num_steps;
@@ -113,6 +119,7 @@ void lights_task(void *arg) {
           led_strip_refresh(led_strip);
 
           light->state = LIGHT_ON;
+
           break;
       }
 

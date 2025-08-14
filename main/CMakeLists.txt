@@ -3,4 +3,6 @@ idf_component_register(SRCS "main.c" "can_bus_sniffer.c" "commands.c" "http_serv
                        REQUIRES esp_http_server
                        REQUIRES esp_wifi
                        REQUIRES nvs_flash
+                       REQUIRES app_update
+                       REQUIRES bootloader_support
                        INCLUDE_DIRS ".")
