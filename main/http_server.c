@@ -148,7 +148,6 @@ esp_err_t ota_handler(httpd_req_t *req)
            update_partition->subtype, update_partition->address);
 
   int binary_file_length = 0;
-  /*deal with all receive packet*/
   bool image_header_was_checked = false;
 
   while (1)
@@ -205,6 +204,11 @@ esp_err_t ota_handler(httpd_req_t *req)
     }
   }
   ESP_LOGI(TAG, "Total Write binary data length: %d", binary_file_length);
+
+  /* Respond with final image length */
+  char resp[128];
+  sprintf(resp, "Image received! Total image length %d bytes. Restarting now...\n", binary_file_length);
+  httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
 
   err = esp_ota_end(update_handle);
   if (err != ESP_OK)

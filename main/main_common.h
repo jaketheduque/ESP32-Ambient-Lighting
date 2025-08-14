@@ -20,8 +20,7 @@
  *        ENUMERATIONS
  * ========================= */
 typedef enum {
-  COMMAND_TURN_OFF,
-  COMMAND_TURN_ON, /* Turns on the lights with the current color set in ambient_light_t, can also be used to "refresh" after color change */
+  COMMAND_SET_COLOR,
   COMMAND_SEQUENTIAL,
   COMMAND_FADE_TO,
 } CommandType;
