@@ -289,12 +289,12 @@ I decided against using the 12V pins on connector X126 since they're labeled as 
 
 Originally, I had hoped to purchase these connectors online to create a harness that could be used to tap into the wires I needed without any modifications to the existing wires. However, after some failed attempts on Alibaba to purchase these connectors, I gave up and decided just to tap into the existing wires.
 
-![Tapped Wires 1](assets/Pasted%20image%2020250603120236.jpg|400)
-![Tapped Wires 2](assets/Pasted%20image%2020250603120257.jpg|400)
-![Tapped Wires 3](assets/Pasted%20image%2020250603120310.jpg|400)
-![Tapped Wires 4](assets/Pasted%20image%2020250603120348.jpg|400)
-![Tapped Wires 5](assets/Pasted%20image%2020250603120359.jpg|400)
-![Tapped Wires 6](assets/Pasted%20image%2020250603120410.jpg|400)
+![Tapped Wires 1](assets/Pasted%20image%2020250603120236.jpg)
+![Tapped Wires 2](assets/Pasted%20image%2020250603120257.jpg)
+![Tapped Wires 3](assets/Pasted%20image%2020250603120310.jpg)
+![Tapped Wires 4](assets/Pasted%20image%2020250603120348.jpg)
+![Tapped Wires 5](assets/Pasted%20image%2020250603120359.jpg)
+![Tapped Wires 6](assets/Pasted%20image%2020250603120410.jpg)
 ![Tapped Wires 7](assets/Pasted%20image%2020250603120428.jpg)
 
 One quick side note regarding the LED strips themselves. They come from the manufacturer with the wires coming straight out of the strips, which leads to a lot of wasted room since the wire cannot bend to a right angle without taking up a significant length. Because of this, for the dashboard lights, I unsoldered the wires, and resoldered them to be right angle; I also took this opportunity to solder the black wire to ground and the yellow to data (*as it should have been in the first place*).
