@@ -246,6 +246,21 @@ The general logic for controlling lights is below,
 - Likewise, if the ambient lighting brightness goes from zero to non-zero while the display is in normal UI mode, then fade the lights to the currently set color
   - This allows for the lights to be controlled using the "Ambient Lights" button in the "Lights" vehicle control menu just like the OEM ones (ex. one driver profile can have the ambient lights turned off, while another can have them on)
   
+## OTA (Over-The-Air) Updates
+I ended up adding OTA functionality for the ESP32 so that I could upload new code just by using `curl` to send a new binary image for the ESP32 to a specific endpoint while connected to the AP hosted by the ESP.
+
+When I was researching how to implement OTA, I found several resources describing how to do it within the Arduino ecosystem, but nothing as clear for FreeRTOS. EspressIf has a page in the [documentation](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/ota.html) on how to implement OTA, and I essentially copy and pasted their example (removing some code I felt I didn't need) into the code for the lighting controller.
+
+**Note:** The ESP32 partition table needs to be configured to support OTA updates by having multiple `ota` partitions. EspressIf provides a default OTA partition table that I used
+
+The general process is as follows:  
+1) When a `.bin` file is uploaded to `/ota` endpoint, the `http_server` task starts the OTA update process
+1) A handle to the non-active `ota` partition is retrieved using `esp_ota_get_next_update_partition`
+1) The image header is first downloaded from the client and checked. If there are no errors, then `esp_ota_begin` is called to setup writing to the `ota` partition that will store the new partition
+1) While the HTTP server is receiving data, `esp_ota_write` is called to write the binary image being sent into the `ota` partition chunk by chunk until all data has been received
+1) A response is sent to the client stating that the image has been received and that the ESP is now being restarted
+1) The boot partition is swapped to the `ota` partition containing the new binary image
+1) The ESP is restarted and will boot using the new binary image
 
 # Schematic and Custom PCB
 ![Schematic](assets/Tesla%20Ambient%20Lighting-1751386897733.png)
@@ -263,19 +278,24 @@ Seeing as this was my first time putting together a PCB, there were some issues.
 - *I don't know why this was happening, and it is recommended by Espressif to have this circuit to add ~10ms delay to the EN pin, but it works fine without it so* ¯\\\_(ツ)_/¯
 ![RC Circuit Issue](assets/Tesla%20Ambient%20Lighting-1752692135813.jpg)
 
-Also, when I was soldering the ESP32, I heat up the chip enough, so there ended up being some gaps on the pads which caused one of the lights to not work.  
+Also, when I was soldering the ESP32, I didn't heat up the chip enough, so there ended up being some gaps on the pads which caused one of the lights to not work.  
 ![Soldering Issue](assets/Tesla%20Ambient%20Lighting-1752692150080.jpg)
 
-After trying again:
+After trying again,
 ![Soldering Fixed](assets/Tesla%20Ambient%20Lighting-1752692164201.jpg)
 Still not gorgeous, but functional.
 
+The proper way to solder this is to put solder paste on the GND pads on the bottom of the chip, apply heat to melt that, and then use a soldering iron to individually solder each pad to the castellated holes on the ESP32. 
+
+I just put solder paste on all the pads and tried to heat them all up at the same time, which does not work very well and leads to problems like what I encountered.
+
 ## Hindsight is 20/20
-Looking back on it, there were some other things I would have liked to implements.
-1) A reset button that pulls the EN pin on the ESP32 low so that the USB cable or power source doesn't have to be disconnected every time
+Looking back on it, there were some other things I would have liked to implement.  
+1) A reset button that pulls the EN pin on the ESP32 low so that the USB cable or power source doesn't have to be disconnected every time  
 2) Utilizing the DTR and RTS pins on the FT231XS USB-UART chip so that the ESP can be automatically restarted and put into bootloader mode when uploading firmware
 
 I am also looking to add Bluetooth as an alternative to the ESP constantly hosting a WIFI AP.
+
 # Installation
 ## Wiring
 Using the schematics available from Tesla, I decided to use the Autopilot ECU connectors in order to tap into power and the chassis CAN bus. Each connector in the car is individually identifiable using an ID assigned by Tesla, and the two connectors used were X120 (for 12V) and X126 (for chassis CAN bus). 
