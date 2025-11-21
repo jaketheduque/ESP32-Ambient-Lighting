@@ -368,6 +368,7 @@ Repeat that for the other side and the door lights are finished!
 # Finished Product
 Overall, I'm pretty satisfied with the final product. I would have liked to add another two LED strips in the center console, but the gap between the wood trim was too tight for me to squeeze the lights in, so I decided just to forgo them for now. In addition, the existing ambient lighting only shines a constant white, and it is possible to replace those lights with RGB ones and link them into the controller. At the end of the day, I don't really notice the color difference and didn't think the extra work was worth it.
 
+https://github.com/user-attachments/assets/1bce3dec-03c1-42a3-88f4-364318faac2c
 ![Finished Product 1](assets/Tesla%20Ambient%20Lighting-1752692399398.jpg)
 ![Finished Product 2](assets/Tesla%20Ambient%20Lighting-1752692404711.jpg)
 
