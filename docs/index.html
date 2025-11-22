@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ESP32 Ambient Lighting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @layer components { 
+            md-h1 { 
+                @apply text-3xl font-bold mt-4 mb-2 pb-2 w-full border-b-3 border-gray-400 
+            } 
+            
+            md-h2 { 
+                @apply text-2xl font-bold mt-2 mb-1 text-gray-600 border-b-2 border-gray-400
+            } 
+            
+            md-h3 { 
+                @apply text-lg font-bold mt-2 mb-1
+            } 
+            
+            md-p { 
+                @apply mb-2 
+            } 
+            
+            a {
+                @apply text-blue-500 underline
+            }
+
+            ul { 
+                @apply mb-2 pl-5 list-inside [&_ul]:list-[revert] 
+            } 
+            
+            code:not(.lang-c) { 
+                @apply bg-gray-100 
+            } 
+            
+            pre { 
+                @apply bg-gray-100
+            } 
+        } 
+    </style>
+</head>
+
+<body class="flex flex-col items-center">
+    <h1 class="text-6xl p-6 w-full bg-gray-200 text-center">Model X Custom Ambient Lighting</h1>
+    <div class="flex flex-col w-75/100">
+        <md-h1>Table of Contents</md-h1>
+        <ul class="text-2xl list-disc list-inside">
+            <li><a href="#background">Background</a></li>
+            <li><a href="#reverse-engineering">Reverse Engineering</a>
+                <ul class="text-xl list-disc">
+                    <li><a href="#led-strips">LED Strips</a></li>
+                    <li><a href="#can-bus">CAN Bus</a></li>
+                </ul>
+            </li>
+            <li><a href="#esp32-controller">ESP32 Controller</a>
+                <ul class="text-xl list-disc">
+                    <li><a href="#controlling-the-led-strips">Controlling the LED strips</a></li>
+                    <li><a href="#can-bus-integration">CAN Bus Integration</a></li>
+                    <li><a href="#wifi">WiFi</a></li>
+                </ul>
+            </li>
+            <li><a href="#code">Code</a>
+                <ul class="text-xl list-disc">
+                    <li><a href="#ota-over-the-air-updates">OTA Updates</a></li>
+                </ul>
+            </li>
+            <li><a href="#schematic-and-custom-pcb">Schematic and Custom PCB</a>
+                <ul class="text-xl list-disc">
+                    <li><a href="#hindsight-is-20-20">Hindsight is 20/20</a></li>
+                </ul>
+            </li>
+            <li><a href="#installation">Installation</a>
+                <ul class="text-xl list-disc">
+                    <li><a href="#wiring">Wiring</a></li>
+                    <li><a href="#dashboard-lights">Dashboard Lights</a></li>
+                    <li><a href="#door-lights">Door Lights</a></li>
+                </ul>
+            </li>
+            <li><a href="#finished-product">Finished Product</a></li>
+        </ul>
+        <md-h1 id="background">Background</md-h1>
+        <md-p>While I love my 2022 Model X, I always felt a pang of jealousy when looking at luxury SUVs (X7, GLS, etc.)
+            that featured fancy RGB ambient lighting. While there is a kit online that you can buy and install to add
+            ambient lighting to the X, I decided to take things into my own hands and take the opportunity to learn how
+            to hack into the vehicles CAN bus, reverse engineer Aliexpress RGB ambient lighting strips, and design my
+            first PCB.</md-p>
+        <md-h1 id="reverse-engineering">Reverse Engineering</md-h1>
+        <md-p>The first step of this project was to reverse engineer the ambient lighting strips I bought off of
+            Aliexpress, along with deciphering the Tesla CAN bus signals to find the data packets that were needed for
+            this project. </md-p>
+        <md-h2 id="led-strips">LED Strips</md-h2>
+        <md-p>The ambient lighting strips bought off of Aliexpress use WB2815-2020 LEDs that are individually
+            addressable.
+            The 3 pin JST-XH connector wires are GND, DATA, 5V. For some reason, on the strips I bought, the ground uses
+            a <strong>yellow</strong> wire while the data line uses a <strong>black</strong> wire, which is super
+            confusing. I also blew up two strips thinking that they used 12V. </md-p>
+        <div role="alert" class="alert alert-error mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>I also blew up <em>another</em> LED strip when I inadvertently turned on my bench
+                top power supply when it was set to 10V and still connected to the breadboard.</span>
+        </div>
+        <md-p><strong>As a quick overview of how the WB2815 LEDs operate:</strong></md-p>
+        <ul class="list-disc">
+            <li>An array of 24-bit packets are sent to the strip by the controller <ul>
+                    <li>Packet contains 3 bytes, one for each color, in GRB order</li>
+                    <li>The individual bit values are distinguished by the time the data line spends HIGH and LOW (refer
+                        to the WS2815 datasheet specific timing numbers) </li>
+                </ul>
+            </li>
+            <li>Each individual LED reads the first packet in line, and shows the corresponding RGB value</li>
+            <li>The remaining packets are passed along to the next LED in line</li>
+            <li>Process repeats until packets run out or until the last LED in line</li>
+        </ul>
+        <img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1747267523833.png"
+            alt="Data transmission method and 24-bit packet composition from WS2815 datasheet">
+        <md-h2 id="can-bus">CAN Bus</md-h2>
+        <md-p>This part ended being much more complicated than I had originally managed. The Model X has several
+            different CAN busses so it took some trial and error before I connected my logic analyzer (shout out Saleae)
+            to the right one.</md-p>
+        <ul class="list-disc">
+            <li>As a side note, the Model X can bus uses a 500kbps bit rate</li>
+        </ul>
+        <md-p><img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1747695016590.png"
+                alt="20 pin diagnostic port pinout"></md-p>
+        <div role="alert" class="alert mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                class="h-6 w-6 shrink-0 stroke-current">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>The CAN bus containing all of the information required is the chassis CAN bus on
+                pins 13 and 14 of the diagnostic CAN port</span>
+        </div>
+        <md-p>Since there are so many messages being sent over the CAN bus, it is quite difficult to isolate a specific
+            message corresponding to an action. A few different approaches were tested:</md-p>
+        <ul>
+            <li>Shoutout to this <a href="https://www.reddit.com/r/HowToHack/s/TRcK2GmOsw">Reddit post</a> for inspiring
+                most of these methods, albeit my execution being much more primitive</li>
+            <li>Also <strong>huge</strong> shoutout to this <a
+                    href="https://www.teslaownersonline.com/threads/diagnostic-port-and-data-access.7502/">online
+                    post</a> that contains a bunch of links and information on how to decode the CAN bus, known codes,
+                etc.</li>
+        </ul>
+        <md-h3 id="attempt-1-unique-ids">Attempt 1 - Unique IDs</md-h3>
+        <ul class="list-decimal">
+            <li>Use the logic analyzer (w/ CAN bus decoding) to get "baseline" CAN bus messages, and save messages to a
+                CSV file</li>
+            <li>Use logic analyzer again, but while recording data, perform action (open door, flash headlights, etc.)
+                and save the messages to a CSV file</li>
+            <li>Use a Python script to parse the messages from both CSV files (each row represents one section of a
+                message, so to recreate a message, several rows need to be parsed)</li>
+            <li>Filter out any identifiers from the second batch of messages that are also present in the baseline
+                messages
+                <ul>
+                    <li>Other filtering methods can be used as well, this one only works if the identifier corresponding
+                        with the action is not sent repeatedly (such as status updates)
+                    </li>
+                </ul>
+            </li>
+            <li>Print the remaining messages, removing any duplicate messages</li>
+        </ul>
+        <md-h3 id="attempt-2-unique-messages">Attempt 2 - Unique Messages</md-h3>
+        <md-p>After getting some potential identifier IDs, I then use an Arduino UNO with a MCP2515 CAN transceiver to
+            find the exact message I am looking for. A table of discovered CAN messages (ID and Data in HEX) is
+            below:</md-p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>ID</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Main screen on (<em>just kidding maybe not?</em>)</td>
+                    <td><code>551</code></td>
+                    <td><code>0 31 1 1 0 1 0 1</code></td>
+                </tr>
+                <tr>
+                    <td>Right side windows</td>
+                    <td><code>518</code></td>
+                </tr>
+            </tbody>
+        </table>
+        <md-h3 id="attempt-3-give-up">Attempt 3 - Give Up</md-h3>
+        <md-p>After much wasted time trying to figure out my own IDs, I stumbled across this absolute gem of a <a
+                href="https://docs.google.com/spreadsheets/d/1ijvNE4lU9Xoruvcg5AhUNLKr7xYyHcxa8YSkTxAERUw/edit?gid=150828462#gid=150828462">spreadsheet</a>
+            containing a database of known IDs. The ones I wrote down are below:</md-p>
+        <ul>
+            <li><code>0x3F5</code> - Light status (ambient lighting, turn signals, headlights, etc.)<ul>
+                    <li>Second data byte is display brightness<ul>
+                            <li>The ambient lighting brightness is linked to the display brightness</li>
+                            <li>If the ambient lighting is off, then this byte is equal to <code>0x00</code></li>
+                            <li><strong>Note:</strong> The code currently doesn't adjust the brightness of the lights
+                                based off of this value, it just checks whether it equals zero</li>
+                        </ul>
+                    </li>
+                    <li><strong>Turn Signals</strong> (didn't end up using)<ul>
+                            <li>First data byte</li>
+                            <li>Left TS Off: <code>0b0000 0001</code></li>
+                            <li>Left TS On: <code>0b0000 0010</code></li>
+                            <li>Right TS Off: <code>0b0000 0100</code></li>
+                            <li>Right TS On: <code>0b0000 1000</code></li>
+                            <li>Hazard Off: <code>0b0001 0101</code></li>
+                            <li>Hazard On: <code>0b0001 1010</code></li>
+                            <li>If no turn signal cycle is ongoing, then byte equals <code>0x00</code></li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+            <li><code>0x3B3</code> - UI Vehicle Status<ul>
+                    <li>Third data byte contains data regarding the display</li>
+                    <li>Bit number 2 (isolated using <code>0x04</code> bit mask) is set if the display is in what I call
+                        &quot;normal&quot; mode, which is basically the normal UI when the car is on. Otherwise, if the
+                        bit is not set, the display could be off, on the sentry mode screen, the charging screen, etc.
+                        <ul>
+                            <li>This bit decides whether to play the start-up animation for the lights</li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+        <md-h1 id="esp32-controller">ESP32 Controller</md-h1>
+        <md-p>For this project, I decided on an ESP32-WROOM-32E chip running FreeRTOS in order to get experience using
+            FreeRTOS and so that multiple tasks (CAN bus, LED control, WIFI server, etc.) could run
+            &quot;concurrently.&quot;</md-p>
+        <md-h2 id="controlling-the-led-strips">Controlling the LED strips</md-h2>
+        <md-p>To control the LED strips, the <code>espressif/led_strip</code> library was used. As currently configured,
+            this library uses the <strong>Remote Control Transceiver (RMT)</strong> peripheral on the ESP32 to send the
+            signals on the data line. The RMT peripheral was originally intended for infrared transmissions, but it is
+            leveraged by the <code>led_strip</code> library to send the timing-critical pulses required to communicate
+            with the WS2815 LEDs. </md-p>
+        <div role="alert" class="alert alert-warning mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>The documentation for the LED strip library recommends using a chip with DMA
+                (direct memory access) in order to prevent context switches from interfering with the timing of the
+                signals.
+                The ESP-WROOM chip I used does not have DMA functionality, but I did not run into any issues since the
+                LED
+                strips used are pretty short.</span>
+        </div>
+        <md-p><img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1747267092819.png"
+                alt="Logic analyzer reading for 0xFF0000 RGB (Transmission order is GRB)"></md-p>
+        <md-p><strong>Example Code for Blinking LED strip w/ RGB Gradient</strong></md-p>
+        <pre><code class="lang-c">
+                // required imports go here
+
+                // LED strip common configuration led_strip_config_t strip_config = 
+                {
+                    .strip_gpio_num = BLINK_GPIO,  // The GPIO that connected to the LED strip's data line
+                    .max_leds = 110,                 // The number of LEDs in the strip,
+                    .led_model = LED_MODEL_WS2812, // LED strip model, it determines the bit timing
+                    .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB, // The color component format is G-R-B
+                    .flags = {
+                        .invert_out = false, // don't invert the output signal
+                    }
+                };
+
+                // RMT backend specific configuration led_strip_rmt_config_t rmt_config = 
+                {
+                    .clk_src = RMT_CLK_SRC_DEFAULT,    // different clock source can lead to different power consumption
+                    .resolution_hz = 10 * 1000 * 1000, // RMT counter clock frequency: 10MHz
+                    .mem_block_symbols = 64,           // the memory size of each RMT channel, in words (4 bytes)
+                    .flags = {
+                        .with_dma = false, // DMA feature is available on chips like ESP32-S3/P4
+                    }
+                };
+
+                void app_main(void)
+                {
+
+                    /// Create the LED strip object led_strip_handle_t led_strip;
+                    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+                    led_strip_clear(led_strip);
+
+                    while (1)
+                    {
+                        uint8_t red = 255;
+                        uint8_t green = 0;
+                        uint8_t blue = 0;
+
+                        for (int i = 0 ; i < strip_config.max_leds ; i++) {
+                            led_strip_set_pixel(led_strip, i, red, green, blue);
+
+                            if (red > 0 && blue == 0) {
+                                red -= 15;
+                                green += 15;
+                            } else if (green > 0) {
+                                green -= 15;
+                                blue += 15;
+                            } else if (blue > 0) {
+                                blue -= 15;
+                                red += 15;
+                            }
+                        }
+
+                        led_strip_refresh(led_strip);
+                        vTaskDelay(1000 / portTICK_PERIOD_MS);
+                        led_strip_clear(led_strip);
+                        vTaskDelay(1000 / portTICK_PERIOD_MS);
+                    }
+                }
+            </code></pre>
+        <md-h2 id="can-bus-integration">CAN Bus Integration</md-h2>
+        <md-p>The ESP32 has a peripheral called the <strong>Two-Wire Automotive Interface (TWAI)</strong> compatible
+            with ISO11898-1 Classical frames. It supports both the Standard Frame Format (11-bit ID) and Extended Frame
+            Format (29-bit ID), both of which are present on the Model X.</md-p>
+        <div role="alert" class="alert mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                class="h-6 w-6 shrink-0 stroke-current">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span><strong>Note:</strong> The TWAI interface on the ESP32 still requires a CAN bus transceiver chip to
+                convert the differential signal to a logic level signal that can be read by the ESP32 (I used the
+                SN65HVD230)</span>
+        </div>
+        <md-p><strong>Example code used for sniffing CAN bus with ESP32</strong></md-p>
+        <pre><code class="lang-c">
+                // required imports static const char* TAG = "can_sniffer";
+
+                // TWAI configuration twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
+                twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
+                twai_filter_config_t f_config;
+
+                uint8_t data[16];
+
+                void app_main(void)
+                {
+                // Configure TWAI acceptance mask
+                // As configured, only accepts messages from 0x7F5.
+                // Check ESP32 TWAI driver documentation for more information on how to set these values 
+                f_config.acceptance_mask = 0x1FFFFF;
+                f_config.acceptance_code = 0x7EA00000;
+                f_config.single_filter = true;
+
+                // Install TWAI driver if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
+                    ESP_LOGI(TAG, "Driver installed");
+                } else {
+                    ESP_LOGI(TAG, "Failed to install driver");
+                    return;
+                }
+
+                // Start TWAI driver if (twai_start() == ESP_OK) {
+                    ESP_LOGI(TAG, "Driver started");
+                } else {
+                    ESP_LOGI(TAG, "Failed to start driver");
+                    return;
+                }
+
+                while (1)
+                {
+                    // Wait for the message to be received twai_message_t message;
+                    esp_err_t receive_status = twai_receive(&message, pdMS_TO_TICKS(1000));
+
+                    if (receive_status == ESP_ERR_TIMEOUT) {
+                    ESP_LOGI(TAG, "Timed out waiting for message");
+                    continue;
+                    } else if (receive_status != ESP_OK) {
+                    ESP_LOGE(TAG, "Error receiving message");
+                    return;
+                    }
+                
+                    // Compare new message data with saved message data if (memcmp(data, message.data, message.data_length_code) != 0) {
+                    // Process received message if (message.extd) {
+                        ESP_LOGI(TAG, "Message is in Extended Format");
+                    } else {
+                        ESP_LOGI(TAG, "Message is in Standard Format");
+                    }
+
+                    ESP_LOGI(TAG, "ID is 0x%03X", (unsigned int) message.identifier);
+                    if (!(message.rtr)) {
+                        // Copy new message data memcpy(data, message.data, message.data_length_code);
+                        
+                        // Format data into single string char data_string[128];
+                        for (int i = 0 ; i < message.data_length_code ; i++) {
+                        char buffer[16];
+                        sprintf(buffer, "%02X ", data[i]);
+                        strcat(data_string, buffer);
+                        }
+                        ESP_LOGI(TAG, "Data: %s", data_string);
+
+                        // Clear data string for next iteration memset(data_string, 0, 128);
+                    }
+
+                    }
+
+                }
+                }
+            </code></pre>
+        <md-h2 id="wifi">WiFi</md-h2>
+        <md-p>The ESP32 is first set up in AP (access point) mode in order to host its own WiFi network that devices can
+            connect to. After initializing in AP mode, an HTTP server with two endpoints (GET and POST) is started.
+            The GET endpoint returns a webpage with an RGB input and submit button, while the POST request takes the RGB
+            data passed in the body and sends it to the light controller task to change the color.
+            <code>more commands to be added here</code>
+        </md-p>
+        <md-h1 id="code">Code</md-h1>
+        <md-p>Each LED strip is controlled using a <code>ambient_light_t</code> struct, containing members for the
+            <code>led_strip</code> library configuration. When an <code>ambient_light_t</code> is initialized using the
+            <code>init_ambient_light</code> method, a new task is started dedicated to controlling that light, and a
+            FreeRTOS queue is created for commands to be sent to the LED strip. The process for controlling an
+            <code>ambient_light_t</code> is as follows:
+        </md-p>
+        <ul class="list-decimal">
+            <li>Add a <code>command_t*</code> to the command queue <ul class="list-disc pl-4">
+                    <li>The command contains information on what the command is, along with any other data required the
+                        command (<code>rgb_t</code> for <code>COMMAND_FADE_TO</code>, etc.)</li>
+            </li>
+        </ul>
+        </li>
+        <div role="alert" class="alert alert-warning mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>It is the responsibility of the one adding the command to the queue to properly
+                allocate memory for the <code>command_t*</code>. Once the command has been executed, the light
+                controller will deallocate the memory used by the command pointer and will set the pointer to
+                <code>NULL</code>
+                as well. This also means that each command must be allocated memory before being sent to the
+                light controller queue, and commands cannot be reused.</span>
+        </div>
+
+        <li>When a command is available on the command queue, the task dedicated to controlling the ambient light
+            will call the appropriate <code>led_strip</code> functions to control the LED strip specified in the
+            <code>ambient_light_t</code> struct. <ul class="list-disc pl-4">
+                <li><code>n</code> array of <code>ambient_light_t</code> handles is shared in
+                    <code>main_common.h</code> so that any class is able to send commands to the LED strips,
+                    assuming that <code>ambient_light_t</code> has been initialized correctly. This is utilized for
+                    the startup animation where the dashboard LEDs, after completion of their animation, start the
+                    sequential animation for the door LEDs, among other things. For simplicity, a common
+                    <code>rgb_t</code> is also shared so that the HTTP server only has to update one color to ensure
+                    all lights are the same color.
+                </li>
+            </ul>
+        </li>
+        </ul>
+        <md-p>The general logic for controlling lights is below,</md-p>
+        <ul class="list-disc">
+            <li>If the display goes from any non-normal state (off, sentry, etc.) to normal UI, then turn on the lights
+                with the startup sequential animation<ul>
+                    <li>This prevents the full startup animation from starting if the lights are turned on/off while the
+                        car is &quot;operational&quot; (ex. while driving) since the animation can be a bit distracting
+                    </li>
+                </ul>
+            </li>
+            <li>If the ambient lighting brightness goes from non-zero to zero while the display is in normal UI mode,
+                then fade the lights off</li>
+            <li>Likewise, if the ambient lighting brightness goes from zero to non-zero while the display is in normal
+                UI mode, then fade the lights to the currently set color<ul>
+                    <li>This allows for the lights to be controlled using the &quot;Ambient Lights&quot; button in the
+                        &quot;Lights&quot; vehicle control menu just like the OEM ones (ex. one driver profile can have
+                        the ambient lights turned off, while another can have them on)</li>
+                </ul>
+            </li>
+        </ul>
+        <md-h2 id="ota-over-the-air-updates">OTA (Over-The-Air) Updates</md-h2>
+        <md-p>I ended up adding OTA functionality for the ESP32 so that I could upload new code just by using
+            <code>curl</code>
+            to send a new binary image for the ESP32 to a specific endpoint while connected to the AP hosted by the ESP.
+        </md-p>
+        <md-p>When I was researching how to implement OTA, I found several resources describing how to do it within the
+            Arduino ecosystem, but nothing as clear for FreeRTOS. EspressIf has a page in the <a
+                href="https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/ota.html">documentation</a>
+            on how to implement OTA, and I essentially copy and pasted their example (removing some code I felt I didn't
+            need) into the code for the lighting controller.</md-p>
+        <div role="alert" class="alert mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                class="h-6 w-6 shrink-0 stroke-current">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>The ESP32 partition table needs to be configured to support OTA updates by having
+                multiple <code>ota</code> partitions. EspressIf provides a default OTA partition table that I
+                used</span>
+        </div>
+        <md-p>The general process is as follows:
+            <ul class="list-decimal">
+                <li>When a <code>.bin</code> file is uploaded to <code>/ota</code> endpoint, the
+                    <code>http_server</code> task starts the OTA update process
+                </li>
+                <li>A handle to the non-active <code>ota</code> partition is retrieved using
+                    <code>esp_ota_get_next_update_partition</code>
+                </li>
+                <li>The image header is first downloaded from the client and checked. If there are no errors, then
+                    <code>esp_ota_begin</code> is called to setup writing to the <code>ota</code> partition that will
+                    store the new partition
+                </li>
+                <li>While the HTTP server is receiving data, <code>esp_ota_write</code> is called to write the binary
+                    image being sent into the <code>ota</code> partition chunk by chunk until all data has been received
+                </li>
+                <li>A response is sent to the client stating that the image has been received and that the ESP is now
+                    being restarted</li>
+                <li>The boot partition is swapped to the <code>ota</code> partition containing the new binary image</li>
+                <li>The ESP is restarted and will boot using the new binary image</li>
+            </ul>
+        </md-p>
+        <md-h1 id="schematic-and-custom-pcb">Schematic and Custom PCB</md-h1>
+        <md-p><img class="w-3/4 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1751386897733.png" alt="Schematic">
+            <img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1751386955666.png" alt="PCB Layout">
+        </md-p>
+        <md-p>This was the first time I had ever designed a schematic and custom PCB for one of my projects, so the PCB
+            design and layout is certainly far from perfect. I ordered the components for the PCB off of Digikey, and
+            the PCB + solder mask off of JLCPCB. It was around $40 for the components and maybe another $20 for the
+            PCB/solder mask. </md-p>
+        <md-p>Here are some pictures of the PCB fresh out of the box, along with a picture of components soldered
+            on:</md-p>
+        <div class="flex flex-horizontal justify-center mb-3">
+            <img class="w-1/4" src="assets/Tesla%20Ambient%20Lighting-1752691864625.jpg" alt="PCB Fresh">
+            <img class="w-1/4" src="assets/Tesla%20Ambient%20Lighting-1752691907320.jpg" alt="PCB Fresh 2">
+            <img class="w-1/4" src="assets/Tesla%20Ambient%20Lighting-1752691993665.jpg" alt="PCB Assembled">
+        </div>
+
+        <p>Seeing as this was my first time putting together a PCB, there were some issues.</p>
+        <details class="collapse bg-base-100 border border-base-300 collapse-arrow" name="soldering-issues-accordion">
+            <summary class="collapse-title font-semibold">RC Delay Circuit Issue</summary>
+            <div class="collapse-content">
+                <md-p>First was that, for some
+                    reason. the RC circuit that adds a delay to the enable pin on the ESP32 was not going above 700mv,
+                    so I just
+                    ripped the resistor and capacitor off and connected EN to VCC on the ESP. </md-p>
+                <ul class="list-disc">
+                    <li><em>I don't know why this was happening, and it is recommended by Espressif to have this circuit
+                            to add
+                            ~10ms delay to the EN pin, but it works fine without it so</em> ¯\_(ツ)_/¯ </li>
+                </ul>
+                <img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1752692135813.jpg"
+                    alt="RC Circuit Issue">
+            </div>
+        </details>
+        <details class="collapse bg-base-100 border border-base-300 collapse-arrow" name="soldering-issues-accordion">
+            <summary class="collapse-title font-semibold">Not Enough Heat</summary>
+            <div class="collapse-content">
+                <p>When I was soldering the ESP32, I didn't heat up the chip
+                    enough, so there ended up being some gaps on the pads which caused one of the lights to not work.
+                </p>
+                <img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1752692150080.jpg"
+                    alt="Soldering Issue">
+                <md-p>After fixing. Still not gorgeous, but functional.</md-p>
+                <img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1752692164201.jpg"
+                    alt="Soldering Fixed">
+            </div>
+        </details>
+
+        <div class="pb-5"></div>
+
+        <md-p>The proper way to solder this is to put solder paste on the GND pads on the bottom of the chip, apply heat
+            to melt that, and then use a soldering iron to individually solder each pad to the castellated holes on the
+            ESP32. </md-p>
+        <md-p>I just put solder paste on all the pads and tried to heat them all up at the same time, which does not
+            work very well and leads to problems like what I encountered.</md-p>
+        <md-h2 id="hindsight-is-20-20">Hindsight is 20/20</md-h2>
+        <md-p>Looking back on it, there were some other things I would have liked to implement.</md-p>
+        <ul class="list-decimal">
+            <li>A reset button that pulls the EN pin on the ESP32 low so that the USB cable or power source doesn't have
+                to be disconnected every time</li>
+            <li>Utilizing the DTR and RTS pins on the FT231XS USB-UART chip so that the ESP can be automatically
+                restarted and put into bootloader mode when uploading firmware</li>
+        </ul>
+        <md-p>I am also looking to add Bluetooth as an alternative to the ESP constantly hosting a WIFI AP.</md-p>
+
+        <md-h1 id="installation">Installation</md-h1>
+        <md-h2 id="wiring">Wiring</md-h2>
+        <md-p>Using the schematics available from Tesla, I decided to use the Autopilot ECU connectors in order to tap
+            into power and the chassis CAN bus. Each connector in the car is individually identifiable using an ID
+            assigned by Tesla, and the two connectors used were X120 (for 12V) and X126 (for chassis CAN bus). </md-p>
+        <md-p>I decided against using the 12V pins on connector X126 since they're labeled as 5A, and I didn't want to
+            push the current limit of those wires only for a fuse or something to blow up. It is possible that the
+            12V 20A pin on the X120 connector is used for some higher power applications, meaning that less power is
+            actually available for me to use, but I felt safer with the bigger number. A 12v to 5v converter off of
+            Amazon was then used to get power to the PCB.</md-p>
+
+        <div class="grid grid-cols-2 gap-4 w-3/4 mx-auto">
+            <img src="assets/Pasted%20image%2020250603084900.png" alt="Wiring Diagram">
+            <img src="assets/Pasted%20image%2020250603085106.png" alt="Connector X120">
+            <img src="assets/Pasted%20image%2020250603085405.png" alt="Connector X126">
+            <img src="assets/Pasted%20image%2020250603085425.png" alt="Connector X126 Closeup">
+        </div>
+
+
+        <div class="pb-5"></div>
+
+        <md-p>Originally, I had hoped to purchase these connectors online to create a harness that could be used to tap
+            into the wires I needed without any modifications to the existing wires. However, after some failed attempts
+            on Alibaba to purchase these connectors, I gave up and decided just to tap into the existing wires.</md-p>
+        <div class="grid grid-cols-4 gap-4 w-3/4 mx-auto mb-5">
+            <img class="w-full" src="assets/Pasted%20image%2020250603120236.jpg" alt="Tapped Wires 1">
+            <img class="w-full" src="assets/Pasted%20image%2020250603120257.jpg" alt="Tapped Wires 2">
+            <img class="w-full" src="assets/Pasted%20image%2020250603120310.jpg" alt="Tapped Wires 3">
+            <img class="w-full" src="assets/Pasted%20image%2020250603120348.jpg" alt="Tapped Wires 4">
+            <img class="w-full" src="assets/Pasted%20image%2020250603120359.jpg" alt="Tapped Wires 5">
+            <img class="w-full" src="assets/Pasted%20image%2020250603120410.jpg" alt="Tapped Wires 6">
+            <img class="w-full" src="assets/Pasted%20image%2020250603120428.jpg" alt="Tapped Wires 7">
+        </div>
+
+        <md-p>One quick side note regarding the LED strips themselves. They come from the manufacturer with the wires
+            coming straight out of the strips, which leads to a lot of wasted room since the wire cannot bend to a right
+            angle without taking up a significant length. Because of this, for the dashboard lights, I unsoldered the
+            wires, and resoldered them to be right angle; I also took this opportunity to solder the black wire to
+            ground and the yellow to data (<em>as it should have been in the first place</em>). <img
+                class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1750134025975.jpg"
+                alt="Dashboard LED Strip">
+        </md-p>
+        <md-h2 id="dashboard-lights">Dashboard Lights</md-h2>
+        <md-p>Starting with the dashboard lights, I had to remove the main display in order to get the dashboard lights
+            as close to the center as possible. It is possible to install them without removing the display, but I
+            couldn't live with myself if I left an inch of unlit space before the main display. The diagnostic panel
+            right above the wireless charger also needs to be removed in order to access the two bolts holding the
+            display on.</md-p>
+        <md-p>After removing the display, it was pretty easy to snake the wires down to the center console where the
+            controller will end up. After installing the lights, the display was reinstalled using the two bolts to the
+            tilt mount. </md-p>
+        <div class="flex flex-horizontal w-3/4 mx-auto mb-5">
+            <div class="flex-1">
+                <img src="assets/Tesla%20Ambient%20Lighting-1750134097123.jpg" alt="Display Removal 1">
+            </div>
+            <div class="flex-1">
+                <img src="assets/Tesla%20Ambient%20Lighting-1750134048209.jpg" alt="Display Removal 2">
+            </div>
+            <div class="flex-1">
+                <img src="assets/Tesla%20Ambient%20Lighting-1750134205108.jpg" alt="Display Removal 3">
+            </div>
+        </div>
+
+        <md-h2 id="door-lights">Door Lights</md-h2>
+        <md-p>This was the <em>really</em> frustrating part. Having to take off the door panel and snake wires through
+            impossible spaces just to try and keep everything looking nice is a huge PITA, but in the end, my conscience
+            is able to rest easy knowing I did my best to do things right. Especially since having the windows catch the
+            wires on the way up/down and ripping them apart would be a buzzkill.</md-p>
+        <md-p>To start, I removed the door panel following Tesla's instructions in the Model X service manual.</md-p>
+        <div class="flex flex-horizontal w-3/4 mx-auto mb-5">
+            <div class="flex-1">
+                <img src="assets/Tesla%20Ambient%20Lighting-1750134249186.jpg" alt="Door Panel Removal 1">
+            </div>
+            <div class="flex-1">
+                <img src="assets/Tesla%20Ambient%20Lighting-1750134255542.jpg" alt="Door Panel Removal 2">
+            </div>
+        </div>
+
+        <div role="alert" class="alert mb-3">
+            <span class="text-2xl">👀</span>
+            <span>There are extra 3-pin connectors that are not plugged into anything in both door
+            panels, and also in the center console and dashboard. I believe these are there from earlier attempts at
+            adding ambient lighting by Tesla, and I spent a couple of hours seeing if I could hijack the wires for
+            communication with my light controller, but in the end I decided it wasn't worth risking damage to the ECUs
+            or other components.</span>
+        </div>
+
+        <md-p>Since the wires for the lights have to run through the rubber snake that connects the door to the body,
+            the wires first have to go inside of the door and make their way to the entry for the rubber snake. This
+            also involves making sure that the new wire is kept close to the existing wire harness so that it does not
+            remain loose inside of the door, since that could lead to the window catching the wire when rolling up or
+            down.
+        </md-p>
+        <md-p>The only way to get any level of useful access to the inside of the door is removing the speaker. The
+            speaker is held in with four screws, but also has these stupid plastic tabs that <em>will</em> break when
+            you try to take the speaker off.</md-p>
+        <div class="flex flex-horizontal w-3/4 mx-auto mb-5">
+            <div class="flex-1"><img src="assets/Tesla%20Ambient%20Lighting-1750134517914.jpg" alt="Speaker Removal">
+            </div>
+
+            <div class="flex-1"><img src="assets/Tesla%20Ambient%20Lighting-1750134827998.jpg" alt="Inside Door"></div>
+        </div>
+
+        <md-p>From there, the wire for the new light was snaked from the main door panel connector through a small hole
+            in the door to enter the inside of the door. Following that was a <strong>lot</strong> of nasty language as
+            I tried to zip tie the new wire to the existing wire harness inside of the door to keep it from flopping
+            around. This is made extra difficult since there is no way to see what your hands are doing, you just have
+            to feel around to get the zip tie properly sinched down.</md-p>
+        <div role="alert" class="alert mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                class="h-6 w-6 shrink-0 stroke-current">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span><strong>Tip: </strong> The Tesla service manual states to roll the window down when removing the door
+                panel, which I did do. However, I then temporarily plugged the door panel back in to roll the window up
+                so
+                that I had more room inside of the door. Just make sure to leave a window open on the other side,
+                especially
+                if you disconnect LV power since that could possibly lead to you being locked out of the car.</span>
+        </div>
+        <md-p>Once the wire is coming out of the door, I used a short vinyl tube to snake through the rubber snake
+            (since it provides enough stiffness to push through the tight gap, while also being flexible to navigate the
+            turns). Once I got it to come out the other end, I tied the wire to one end and pulled the wire through
+            using the vinyl tube. </md-p>
+        <md-p><img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1750134908032.jpg"
+                alt="Snaking Wire"></md-p>
+        <md-p>After that, the wiring for the door lighting was run under the floor carpeting to the center console area
+            where the light controller will be housed.</md-p>
+        <md-p><img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1750134945630.jpg" alt="Under Carpet 1">
+            <img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1750134952253.jpg" alt="Under Carpet 2">
+        </md-p>
+        <md-p>As for the light itself, the wires were first passed through a hole in the door panel where the wooden
+            trim was removed. The wires were then tied to the existing wiring just to keep it tidy. After the door panel
+            was reinstalled and the interior wooden trim was put back on, the light was pushed into the gap.</md-p>
+        <div role="alert" class="alert mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                class="h-6 w-6 shrink-0 stroke-current">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>I used 3 pin JST-XH connectors between the door panel and the door so that, in the
+            future, the door panel can be removed fully just by disconnecting the existing connectors along with the
+            3
+            pin connector for the ambient lighting.</span>
+        </div>
+        <md-p><img class="w-1/2 mx-auto" src="assets/Tesla%20Ambient%20Lighting-1750135095715.jpg"
+                alt="Door Light Installed"></md-p>
+        <md-p>Repeat that for the other side and the door lights are finished!</md-p>
+        <md-h1 id="finished-product">Finished Product</md-h1>
+        <md-p>Overall, I'm pretty satisfied with the final product. I would have liked to add another two LED strips in
+            the center console, but the gap between the wood trim was too tight for me to squeeze the lights in, so I
+            decided just to forgo them for now. In addition, the existing ambient lighting only shines a constant white,
+            and it is possible to replace those lights with RGB ones and link them into the controller. At the end of
+            the day, I don't really notice the color difference and didn't think the extra work was worth it.
+        </md-p>
+        <md-p>The RGB values used for the picture was <code>0x646464</code> (around half brightness pure white). This
+            ended up being a little too bright for my taste, and I have since moved to <code>0x503C14</code> for a dim
+            warm white color that is much easier on the eyes.</md-p>
+        <div class="flex flex-horizontal w-full mx-auto mb-5">
+            <div class="flex-1 p-2">
+                <img src="assets/Tesla%20Ambient%20Lighting-1752692399398.jpg" alt="Finished Product 1">
+            </div>
+            <div class="flex-1 p-2">
+                <img src="assets/Tesla%20Ambient%20Lighting-1752692404711.jpg" alt="Finished Product 2">
+            </div>
+            <div class="flex-1 p-2 my-auto">
+                <video controls>
+                    <source src="assets/full_light_demo.mp4" type="video/mp4">
+                </video>
+            </div>
+        </div>
+
+
+
+    </div>
+</body>
+
+</html>
