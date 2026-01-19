@@ -1,0 +1,29 @@
+Drill report for Tesla Ambient Lighting.kicad_pcb
+Created on 2026-01-19T10:27:03-0800
+
+Copper Layer Stackup:
+    =============================================================
+    L1 :  F.Cu                      front
+    L2 :  B.Cu                      back
+
+
+Drill file 'Tesla Ambient Lighting-PTH.drl' contains
+    plated through holes:
+    =============================================================
+    T1  0.300mm  0.0118"  (45 holes)
+    T2  0.300mm  0.0118"  (12 holes)
+    T3  0.600mm  0.0236"  (4 holes)  (with 4 slots)
+    T4  0.950mm  0.0374"  (12 holes)
+    T5  1.000mm  0.0394"  (2 holes)
+    T6  1.100mm  0.0433"  (2 holes)
+
+    Total plated holes count 77
+
+
+Drill file 'Tesla Ambient Lighting-NPTH.drl' contains
+    unplated through holes:
+    =============================================================
+    T1  0.650mm  0.0256"  (2 holes)
+    T2  2.200mm  0.0866"  (3 holes)
+
+    Total unplated holes count 5
