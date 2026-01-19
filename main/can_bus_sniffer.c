@@ -5,7 +5,7 @@
 #include "freertos/task.h"
 
 #include "main_common.h"
-#include "commands.c"
+#include "commands.h"
 
 /* TWAI configuration */
 static twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
@@ -29,7 +29,6 @@ void can_sniffer_task() {
     twai_message_t message;
     esp_err_t receive_status = twai_receive(&message, pdMS_TO_TICKS(1000));
     if (receive_status == ESP_ERR_TIMEOUT) {
-      ESP_LOGD(TAG, "Timed out waiting for message");
       continue;
     } else if (receive_status != ESP_OK) {
       ESP_LOGE(TAG, "Error receiving message");

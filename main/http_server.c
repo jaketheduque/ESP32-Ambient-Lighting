@@ -11,6 +11,7 @@
 
 #include "../libraries/cJson.h"
 #include "main_common.h"
+#include "commands.h"
 
 #define ESP_WIFI_SSID CONFIG_ESP_WIFI_SSID
 #define ESP_WIFI_PASS CONFIG_ESP_WIFI_PASSWORD
@@ -37,33 +38,29 @@ esp_err_t get_handler(httpd_req_t *req)
       "</head>\n"
       "<body>\n"
       "  <h1>Tesla Ambient Lighting Control</h1>\n"
-      "  <p><b>Note:</b> Any changes to color made will appear on the next light refresh</p>\n"
-      "  <label for=\"red\">Red:</label>\n"
-      "  <input type=\"number\" id=\"red\" name=\"red\" min=\"0\" max=\"255\" value=\"0\">\n"
-      "  <br>\n"
-      "  <label for=\"green\">Green:</label>\n"
-      "  <input type=\"number\" id=\"green\" name=\"green\" min=\"0\" max=\"255\" value=\"0\">\n"
-      "  <br>\n"
-      "  <label for=\"blue\">Blue:</label>\n"
-      "  <input type=\"number\" id=\"blue\" name=\"blue\" min=\"0\" max=\"255\" value=\"0\">\n"
-      "  <br>\n"
+      "  <p>Choose Color: <input type=\"color\" id=\"color\" name=\"color\" value=\"#ffffff\"></p>\n"
       "  <button id=\"submitBtn\">Submit</button>\n"
       "  <script>\n"
       "    document.getElementById('submitBtn').addEventListener('click', function() {\n"
-      "      const red = document.getElementById('red').value;\n"
-      "      const green = document.getElementById('green').value;\n"
-      "      const blue = document.getElementById('blue').value;\n"
+      "      const color = document.getElementById('color').value;\n"
+      "      \n"
+      "      // Convert hex color to RGB\n"
+      "      const hex = color.replace('#', '');\n"
+      "      const red = parseInt(hex.substring(0, 2), 16);\n"
+      "      const green = parseInt(hex.substring(2, 4), 16);\n"
+      "      const blue = parseInt(hex.substring(4, 6), 16);\n"
+      "      \n"
       "      fetch('/api', {\n"
       "        method: 'POST',\n"
       "        headers: {\n"
       "          'Content-Type': 'application/json'\n"
       "        },\n"
-      "        body: JSON.stringify({ red: Number(red), green: Number(green), blue: Number(blue) })\n"
-      "      });\n"
+      "        body: JSON.stringify({ color: { red: red, green: green, blue: blue } })\n"
+      "      })\n"
       "    });\n"
       "  </script>\n"
       "</body>\n"
-      "</html>";
+      "</html>\n";
   httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
   return ESP_OK;
 }
@@ -117,6 +114,14 @@ esp_err_t api_handler(httpd_req_t *req)
   xSemaphoreTake(current_color_lock, portMAX_DELAY);
   current_color = color;
   xSemaphoreGive(current_color_lock);
+
+  /* Send a set color command to the LEDs so that the color is changed immediately */
+  ESP_LOGI(TAG, "Refreshing LED color");
+  command_t* door_command = create_set_color_command(color);
+  command_t* dashboard_command = create_set_color_command(color);
+
+  xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+  xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
 
   return ESP_OK;
 }
