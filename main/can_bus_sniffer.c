@@ -98,9 +98,13 @@ void can_sniffer_task() {
           }
         }
 
-        /* If ambient lighting has turned off, turn off lights */
+        /* If ambient lighting has turned off, flush stale commands and turn off lights */
         if ((message.data[AMBIENT_LIGHT_BYTE_INDEX] == 0) && previous_light_data[AMBIENT_LIGHT_BYTE_INDEX]) {
           ESP_LOGI(TAG, "Ambient lighting has turned off");
+
+          /* Flush any queued commands so the turn-off is not delayed */
+          flush_command_queue(lights[DASHBOARD_INDEX].command_queue);
+          flush_command_queue(lights[DOOR_INDEX].command_queue);
 
           command_t* door_command = create_default_fade_to_command(COLOR_OFF);
           command_t* dashboard_command = create_default_fade_to_command(COLOR_OFF);
