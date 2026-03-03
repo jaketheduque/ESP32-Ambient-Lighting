@@ -55,7 +55,7 @@ esp_err_t get_handler(httpd_req_t *req)
       "        headers: {\n"
       "          'Content-Type': 'application/json'\n"
       "        },\n"
-      "        body: JSON.stringify({ color: { red: red, green: green, blue: blue } })\n"
+      "        body: JSON.stringify({ red: red, green: green, blue: blue })\n"
       "      })\n"
       "    });\n"
       "  </script>\n"

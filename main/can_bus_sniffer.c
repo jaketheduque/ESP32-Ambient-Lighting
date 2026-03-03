@@ -62,7 +62,8 @@ void can_sniffer_task() {
     if (receive_status == ESP_ERR_TIMEOUT) {
       continue;
     } else if (receive_status != ESP_OK) {
-      ESP_LOGE(TAG, "Error receiving message");
+      ESP_LOGE(TAG, "Error receiving message: %s", esp_err_to_name(receive_status));
+      recover_twai();
       continue;
     }
 

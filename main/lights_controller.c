@@ -24,8 +24,8 @@ void lights_task(void *arg) {
     if (xQueueReceive(light->command_queue, &command, portMAX_DELAY)) {
       switch (command->type) {
         case COMMAND_SET_COLOR:
-          if (command->data.color.red == 0 && 
-              command->data.color.green == 0 && 
+          if (command->data.color.red == 0 &&
+              command->data.color.green == 0 &&
               command->data.color.blue == 0) {
             /* If the target color is black, turn off the lights */
             light->state = LIGHT_OFF;
@@ -35,9 +35,9 @@ void lights_task(void *arg) {
           }
 
           for (int i = 0 ; i < strip_config.max_leds ; i++) {
-              led_strip_set_pixel(led_strip, i, 
-                command->data.color.red, 
-                command->data.color.green, 
+              led_strip_set_pixel(led_strip, i,
+                command->data.color.red,
+                command->data.color.green,
                 command->data.color.blue);
           }
           led_strip_refresh(led_strip);
@@ -121,13 +121,11 @@ void lights_task(void *arg) {
           }
           led_strip_refresh(led_strip);
 
-          if (command->data.color.red == 0 && 
-              command->data.color.green == 0 && 
+          if (command->data.color.red == 0 &&
+              command->data.color.green == 0 &&
               command->data.color.blue == 0) {
-            /* If the target color is black, turn off the lights */
             light->state = LIGHT_OFF;
           } else {
-            /* Otherwise, set the state to LIGHT_ON */
             light->state = LIGHT_ON;
           }
 
