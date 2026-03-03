@@ -91,8 +91,13 @@ typedef struct {
 #define RIGHT_TS_MASK 0x08
 #define AMBIENT_LIGHT_BYTE_INDEX 1
 
-#define TWAI_ACCEPTANCE_MASK 0xFFFFFFFF
-#define TWAI_ACCEPTANCE_CODE 0xFFFFFFFF
+/* Hardware filter: accept only 0x3B3 (DISPLAY_CAN_ID) and 0x3F5 (LIGHTS_CAN_ID).
+ * XOR of the two IDs gives the bits that differ (0x046). The acceptance code holds
+ * the common bits of both IDs, and the mask marks differing ID bits + all non-ID
+ * bits as "don't care" (1 = don't care in ESP32 TWAI filter). */
+#define TWAI_FILTER_ID_XOR   (DISPLAY_CAN_ID ^ LIGHTS_CAN_ID)
+#define TWAI_ACCEPTANCE_CODE ((uint32_t)(DISPLAY_CAN_ID & ~TWAI_FILTER_ID_XOR) << 21)
+#define TWAI_ACCEPTANCE_MASK (((uint32_t)TWAI_FILTER_ID_XOR << 21) | 0x001FFFFF)
 
 #define LIGHT_CONTROLLER_TASK_PRIORITY 5
 #define WEB_SERVER_TASK_PRIORITY 10
