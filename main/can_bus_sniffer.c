@@ -7,6 +7,37 @@
 #include "main_common.h"
 #include "commands.h"
 
+/* Drain a command queue, freeing every pending command_t (and its chained command). */
+static void flush_command_queue(QueueHandle_t queue) {
+  command_t *cmd;
+  while (xQueueReceive(queue, &cmd, 0) == pdTRUE) {
+    if (cmd->chained_command != NULL) {
+      free(cmd->chained_command);
+    }
+    free(cmd);
+  }
+}
+
+/* Attempt to recover the TWAI driver from bus-off or stopped state. */
+static void recover_twai(void) {
+  twai_status_info_t status;
+  if (twai_get_status_info(&status) != ESP_OK) {
+    return;
+  }
+
+  if (status.state == TWAI_STATE_BUS_OFF) {
+    ESP_LOGW("can_sniffer", "TWAI bus-off detected, initiating recovery");
+    twai_initiate_recovery();
+    /* Wait for the 128 × 11 recessive-bit recovery sequence to complete */
+    vTaskDelay(pdMS_TO_TICKS(1500));
+    twai_start();
+    ESP_LOGI("can_sniffer", "TWAI recovery complete");
+  } else if (status.state == TWAI_STATE_STOPPED) {
+    ESP_LOGW("can_sniffer", "TWAI stopped unexpectedly, restarting");
+    twai_start();
+  }
+}
+
 /* TWAI configuration */
 static twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
 static twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
