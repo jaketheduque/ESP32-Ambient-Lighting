@@ -87,8 +87,14 @@ void can_sniffer_task() {
             command_t* dashboard_command = create_default_fade_to_command(current_color);
             xSemaphoreGive(current_color_lock);
 
-            xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
-            xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
+            if (xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, 0) != pdTRUE) {
+              ESP_LOGW(TAG, "Dashboard queue full, dropping fade-on command");
+              free(dashboard_command);
+            }
+            if (xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, 0) != pdTRUE) {
+              ESP_LOGW(TAG, "Door queue full, dropping fade-on command");
+              free(door_command);
+            }
           }
         }
 
@@ -99,9 +105,14 @@ void can_sniffer_task() {
           command_t* door_command = create_default_fade_to_command(COLOR_OFF);
           command_t* dashboard_command = create_default_fade_to_command(COLOR_OFF);
 
-          /* Send commands to the queues */
-          xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
-          xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, portMAX_DELAY);
+          if (xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, 0) != pdTRUE) {
+            ESP_LOGE(TAG, "Failed to send turn-off command to dashboard queue");
+            free(dashboard_command);
+          }
+          if (xQueueSend(lights[DOOR_INDEX].command_queue, &door_command, 0) != pdTRUE) {
+            ESP_LOGE(TAG, "Failed to send turn-off command to door queue");
+            free(door_command);
+          }
         }
 
         char data_str[3 * TWAI_FRAME_MAX_DLC] = {0};
@@ -130,7 +141,11 @@ void can_sniffer_task() {
             dashboard_command->chained_command_queue = lights[DOOR_INDEX].command_queue;
             dashboard_command->chained_command = door_command;
 
-            xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, portMAX_DELAY);
+            if (xQueueSend(lights[DASHBOARD_INDEX].command_queue, &dashboard_command, 0) != pdTRUE) {
+              ESP_LOGW(TAG, "Dashboard queue full, dropping startup animation command");
+              free(door_command);
+              free(dashboard_command);
+            }
           }
         }
 

@@ -136,9 +136,9 @@ void lights_task(void *arg) {
 
       /* Check if there is a valid chained command */
       if (command->chained_command != NULL) {
-        /* If there is a chained command, send it to the queue */
-        if (xQueueSend(command->chained_command_queue, &command->chained_command, portMAX_DELAY) != pdTRUE) {
-          ESP_LOGE(TAG, "Failed to send chained command to queue");
+        if (xQueueSend(command->chained_command_queue, &command->chained_command, 0) != pdTRUE) {
+          ESP_LOGE(TAG, "Failed to send chained command to queue, dropping");
+          free(command->chained_command);
         }
       }
 
