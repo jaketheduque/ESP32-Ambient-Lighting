@@ -41,6 +41,7 @@ void lights_task(void *arg) {
                 command->data.color.blue);
           }
           led_strip_refresh(led_strip);
+          light->current_led_color = command->data.color;
 
           break;
         case COMMAND_SEQUENTIAL:
@@ -91,21 +92,23 @@ void lights_task(void *arg) {
           led_strip_refresh(led_strip);
 
           light->state = LIGHT_ON;
+          light->current_led_color = command->data.color;
 
           break;
         case COMMAND_FADE_TO:
           light->state = LIGHT_TRANSITIONING;
 
-          int8_t red_step = ((int)command->data.color.red - (int)command->data.color.red) / command->data.step.num_steps;
-          int8_t green_step = ((int)command->data.color.green - (int)command->data.color.green) / command->data.step.num_steps;
-          int8_t blue_step = ((int)command->data.color.blue - (int)command->data.color.blue) / command->data.step.num_steps;
+          /* Compute per-channel delta from the current LED color to the target */
+          int red_delta   = (int)command->data.color.red   - (int)light->current_led_color.red;
+          int green_delta = (int)command->data.color.green - (int)light->current_led_color.green;
+          int blue_delta  = (int)command->data.color.blue  - (int)light->current_led_color.blue;
 
-          /* Fade each LED to the target color in steps */
+          /* Fade each LED from current color to the target color in steps */
           for (int step = 0; step < command->data.step.num_steps; step++) {
             rgb_t temp_color;
-            temp_color.red = command->data.color.red + (red_step * (step + 1));
-            temp_color.green = command->data.color.green + (green_step * (step + 1));
-            temp_color.blue = command->data.color.blue + (blue_step * (step + 1));
+            temp_color.red   = (uint8_t)(light->current_led_color.red   + (red_delta   * (step + 1)) / command->data.step.num_steps);
+            temp_color.green = (uint8_t)(light->current_led_color.green + (green_delta * (step + 1)) / command->data.step.num_steps);
+            temp_color.blue  = (uint8_t)(light->current_led_color.blue  + (blue_delta  * (step + 1)) / command->data.step.num_steps);
 
             for (int i = 0; i < strip_config.max_leds; i++) {
               led_strip_set_pixel(led_strip, i, temp_color.red, temp_color.green, temp_color.blue);
@@ -115,11 +118,12 @@ void lights_task(void *arg) {
             vTaskDelay(pdMS_TO_TICKS(command->data.step.delay_ms));
           }
 
-          /* For good measure, set the entire strip to the new color */
+          /* For good measure, set the entire strip to the target color */
           for (int i = 0; i < strip_config.max_leds; i++) {
             led_strip_set_pixel(led_strip, i, command->data.color.red, command->data.color.green, command->data.color.blue);
           }
           led_strip_refresh(led_strip);
+          light->current_led_color = command->data.color;
 
           if (command->data.color.red == 0 &&
               command->data.color.green == 0 &&
@@ -192,6 +196,7 @@ esp_err_t init_ambient_light(ambient_light_t *light, const int gpio_num, const i
   ESP_ERROR_CHECK(led_strip_new_rmt_device(&light->strip_config, &light->rmt_config, &led_strip));
   led_strip_clear(led_strip);
   light->state = LIGHT_OFF;
+  light->current_led_color = COLOR_OFF;
 
   /* Start the lights_task using FreeRTOS */
   BaseType_t task_result = xTaskCreatePinnedToCore(

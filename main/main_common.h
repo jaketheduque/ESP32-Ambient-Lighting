@@ -61,6 +61,7 @@ typedef struct {
   led_strip_rmt_config_t rmt_config;
   QueueHandle_t command_queue;
   LightState state;
+  rgb_t current_led_color;
 } ambient_light_t;
 
 /* =========================
